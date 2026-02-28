@@ -1,0 +1,91 @@
+{
+  "lathe_1": {
+    "display_name": "Lathe 1",
+    "status": "monitoring",
+    "sensors_per_bearing": 2,
+    "bearings": {
+      "bearing1": [
+        "bearing1_ch1",
+        "bearing1_ch2"
+      ],
+      "bearing2": [
+        "bearing2_ch1",
+        "bearing2_ch2"
+      ],
+      "bearing3": [
+        "bearing3_ch1",
+        "bearing3_ch2"
+      ],
+      "bearing4": [
+        "bearing4_ch1",
+        "bearing4_ch2"
+      ]
+    },
+    "known_failures": {
+      "bearing3": "Inner Race Defect",
+      "bearing4": "Rolling Element Defect"
+    },
+    "data_source": "nasa_ims",
+    "dataset_path": "1st_test",
+    "collection_hours_required": 0,
+    "collection_hours_completed": 0,
+    "healthy_confirmed": true,
+    "registered_at": "2003-10-22T12:06:24"
+  },
+  "lathe_2": {
+    "display_name": "Lathe 2",
+    "status": "monitoring",
+    "sensors_per_bearing": 1,
+    "bearings": {
+      "bearing1": [
+        "bearing1_ch1"
+      ],
+      "bearing2": [
+        "bearing2_ch1"
+      ],
+      "bearing3": [
+        "bearing3_ch1"
+      ],
+      "bearing4": [
+        "bearing4_ch1"
+      ]
+    },
+    "known_failures": {
+      "bearing1": "Outer Race Failure"
+    },
+    "data_source": "nasa_ims",
+    "dataset_path": "2nd_test",
+    "collection_hours_required": 0,
+    "collection_hours_completed": 0,
+    "healthy_confirmed": true,
+    "registered_at": "2004-02-12T00:00:00"
+  },
+  "lathe_3": {
+    "display_name": "Lathe 3",
+    "status": "monitoring",
+    "sensors_per_bearing": 1,
+    "bearings": {
+      "bearing1": [
+        "bearing1_ch1"
+      ],
+      "bearing2": [
+        "bearing2_ch1"
+      ],
+      "bearing3": [
+        "bearing3_ch1"
+      ],
+      "bearing4": [
+        "bearing4_ch1"
+      ]
+    },
+    "known_failures": {
+      "bearing3": "Outer Race Failure"
+    },
+    "data_source": "nasa_ims",
+    "dataset_path": "3rd_test/txt",
+    "collection_hours_required": 0,
+    "collection_hours_completed": 0,
+    "healthy_confirmed": true,
+    "registered_at": "2004-03-04T00:00:00"
+  }
+}

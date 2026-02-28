@@ -1,0 +1,153 @@
+# CNC Predictive Maintenance System
+# Digital Systems Project - Charles Rodway
+#
+# Services:
+#   rabbitmq  - message broker between raspi containers and backend
+#   backend   - consumes RabbitMQ messages, holds system state, exposes REST API
+#   trainer   - watches lathes.json for new machines, auto-trains models
+#   lathe_1   - simulates Raspberry Pi for Lathe 1 (monitoring mode)
+#   lathe_2   - simulates Raspberry Pi for Lathe 2 (monitoring mode)
+#   lathe_3   - simulates Raspberry Pi for Lathe 3 (monitoring mode)
+#
+# The dashboard is a standalone HTML file (dashboard.html in project root).
+# Open it in Chrome while these containers are running.
+# Dashboard connects to the backend API at http://localhost:8000
+#
+# Usage:
+#   docker-compose up --build
+#   Then open dashboard.html in Chrome
+
+services:
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: password
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cnc_network
+
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile
+    container_name: backend
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config:/app/config
+      - ./models:/app/models
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: password
+    networks:
+      - cnc_network
+    restart: unless-stopped
+
+  trainer:
+    build:
+      context: ./src/trainer
+      dockerfile: Dockerfile
+    container_name: trainer
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config
+      - ./models:/app/models
+      - ./data:/app/data
+      - ../bearing_data:/app/bearing_data:ro
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: password
+    networks:
+      - cnc_network
+    restart: unless-stopped
+
+  lathe_1:
+    build:
+      context: ./src/raspi
+      dockerfile: Dockerfile
+    container_name: lathe_1_raspi
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config
+      - ./models:/app/models
+      - ../bearing_data:/app/bearing_data:ro
+      - ./data:/app/data
+    environment:
+      LATHE_NAME: lathe_1
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: password
+      STREAM_DELAY: "0.1"
+      STREAM_START_PERCENT: "75"
+    networks:
+      - cnc_network
+    restart: unless-stopped
+
+  lathe_2:
+    build:
+      context: ./src/raspi
+      dockerfile: Dockerfile
+    container_name: lathe_2_raspi
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config
+      - ./models:/app/models
+      - ../bearing_data:/app/bearing_data:ro
+      - ./data:/app/data
+    environment:
+      LATHE_NAME: lathe_2
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: password
+      STREAM_DELAY: "0.5"
+    networks:
+      - cnc_network
+    restart: unless-stopped
+
+  lathe_3:
+    build:
+      context: ./src/raspi
+      dockerfile: Dockerfile
+    container_name: lathe_3_raspi
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config
+      - ./models:/app/models
+      - ../bearing_data:/app/bearing_data:ro
+      - ./data:/app/data
+    environment:
+      LATHE_NAME: lathe_3
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: password
+      STREAM_DELAY: "0.5"
+    networks:
+      - cnc_network
+    restart: unless-stopped
+
+networks:
+  cnc_network:
+    driver: bridge

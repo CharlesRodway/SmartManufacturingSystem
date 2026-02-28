@@ -1,0 +1,62 @@
+[
+  {
+    "lathe": "lathe_1",
+    "bearing": "bearing4",
+    "timestamp": "2026-02-28T16:34:22.120370",
+    "reading": 50,
+    "score": -0.0679,
+    "kurtosis": 3.756,
+    "rms": 0.1877,
+    "resolved": false
+  },
+  {
+    "lathe": "lathe_1",
+    "bearing": "bearing3",
+    "timestamp": "2026-02-28T16:34:54.413710",
+    "reading": 204,
+    "score": -0.1203,
+    "kurtosis": 5.774,
+    "rms": 0.173,
+    "resolved": false
+  },
+  {
+    "lathe": "lathe_2",
+    "bearing": "bearing1",
+    "timestamp": "2026-02-28T16:39:11.261706",
+    "reading": 534,
+    "score": -0.1316,
+    "kurtosis": 2.349,
+    "rms": 0.1652,
+    "resolved": false
+  },
+  {
+    "lathe": "lathe_3",
+    "bearing": "bearing3",
+    "timestamp": "2026-02-28T17:21:21.131185",
+    "reading": 4945,
+    "score": -0.0683,
+    "kurtosis": 0.375,
+    "rms": 0.1479,
+    "resolved": false
+  },
+  {
+    "lathe": "lathe_3",
+    "bearing": "bearing4",
+    "timestamp": "2026-02-28T17:21:21.705681",
+    "reading": 4946,
+    "score": -0.0642,
+    "kurtosis": 0.191,
+    "rms": 0.0829,
+    "resolved": false
+  },
+  {
+    "lathe": "lathe_3",
+    "bearing": "bearing2",
+    "timestamp": "2026-02-28T17:22:04.154306",
+    "reading": 5020,
+    "score": -0.0691,
+    "kurtosis": 0.217,
+    "rms": 0.1444,
+    "resolved": false
+  }
+]
