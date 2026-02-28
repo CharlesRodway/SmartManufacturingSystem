@@ -83,8 +83,10 @@ COLS_4 = [
 
 TRAIN_SPLIT = 0.2
 
-# Alert threshold - consecutive anomalies before triggering alert
-ANOMALY_STREAK_THRESHOLD = 30
+# Alert threshold - consecutive anomalies before triggering CRITICAL alert.
+# Raised to 50 to filter false positives caused by fault propagation from
+# adjacent failing bearings increasing overall shaft vibration near end of test.
+ANOMALY_STREAK_THRESHOLD = 50
 
 # Delay between readings (0 = full speed, 0.1 = demo mode)
 DELAY = 0.0
@@ -161,7 +163,10 @@ def load_bearing_models(lathe_name, bearings):
 
 # ============ HEALTH STATUS ============
 
-def get_health_status(score, streak):
+def get_health_status(score, streak, latched):
+    # If latched CRITICAL, stay CRITICAL regardless of current reading
+    if latched:
+        return "CRITICAL"
     if streak >= ANOMALY_STREAK_THRESHOLD:
         return "CRITICAL"
     elif score < 0:
@@ -236,6 +241,7 @@ def main():
     # Per-bearing tracking
     bearing_streaks = {b: 0 for b in bearings}
     bearing_alerts = {b: False for b in bearings}
+    bearing_latched = {b: False for b in bearings}  # latching - once CRITICAL stays CRITICAL
     bearing_alert_readings = {b: None for b in bearings}
     first_anomaly_readings = {b: None for b in bearings}
 
@@ -262,27 +268,30 @@ def main():
                 score = model.decision_function(X)[0]
                 is_anomaly = (pred == -1)
 
-                # Update streak
-                if is_anomaly:
-                    bearing_streaks[bearing_name] += 1
-                    if first_anomaly_readings[bearing_name] is None:
-                        first_anomaly_readings[bearing_name] = reading_num
-                else:
-                    bearing_streaks[bearing_name] = 0
+                # Update streak (only if not already latched)
+                if not bearing_latched[bearing_name]:
+                    if is_anomaly:
+                        bearing_streaks[bearing_name] += 1
+                        if first_anomaly_readings[bearing_name] is None:
+                            first_anomaly_readings[bearing_name] = reading_num
+                    else:
+                        bearing_streaks[bearing_name] = 0
 
                 streak = bearing_streaks[bearing_name]
 
-                # Trigger alert if streak threshold hit
+                # Trigger alert and latch if streak threshold hit
                 if streak >= ANOMALY_STREAK_THRESHOLD and not bearing_alerts[bearing_name]:
                     bearing_alerts[bearing_name] = True
+                    bearing_latched[bearing_name] = True
                     bearing_alert_readings[bearing_name] = reading_num
                     print(f"\n{'!'*60}")
                     print(f"ALERT: {bearing_name.upper()} on {lathe_name.upper()}")
                     print(f"  {ANOMALY_STREAK_THRESHOLD} consecutive anomalies detected!")
+                    print(f"  Status LATCHED at CRITICAL - manual reset required")
                     print(f"  Schedule maintenance - bearing degradation likely")
                     print(f"{'!'*60}\n")
 
-                status = get_health_status(score, streak)
+                status = get_health_status(score, streak, bearing_latched[bearing_name])
                 bearing_results[bearing_name] = {
                     'score': score,
                     'is_anomaly': is_anomaly,
@@ -333,7 +342,7 @@ def main():
             readings_remaining = total - alert_r
             hours_warning = (readings_remaining * 10) / 60
             days_warning = hours_warning / 24
-            print(f"  Alert triggered: Reading {alert_r}")
+            print(f"  Alert triggered: Reading {alert_r} (LATCHED at CRITICAL)")
             print(f"  Warning time:    ~{hours_warning:.1f} hours (~{days_warning:.1f} days)")
         else:
             print(f"  Alert triggered: No (threshold: {ANOMALY_STREAK_THRESHOLD} consecutive)")

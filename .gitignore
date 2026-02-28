@@ -97,7 +97,3 @@ dmypy.json
 # 01_model_development/results/training_results.csv
 # 01_model_development/results/anomaly_analysis.png
 
-# ignore generated outputs
-01_model_development/results/
-*.pkl
-*.csv
