@@ -85,6 +85,7 @@ dmypy.json
 
 # NASA IMS Bearing Dataset - all three tests (~6GB total, do not commit)
 /bearing_data/
+/hydraulic_data/
 
 # Trained model file - regenerate by running 01_model_development/train_isolation_forest.py
 02_system/models/isolation_forest_model.pkl
