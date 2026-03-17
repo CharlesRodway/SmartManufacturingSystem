@@ -82,6 +82,7 @@ dmypy.json
 # .vscode/
 
 # ============ PROJECT SPECIFIC ============
+<<<<<<< Updated upstream
 
 # NASA IMS Bearing Dataset - all three tests (~6GB total, do not commit)
 /bearing_data/
@@ -98,3 +99,19 @@ dmypy.json
 # 01_model_development/results/training_results.csv
 # 01_model_development/results/anomaly_analysis.png
 
+=======
+
+# NASA IMS Bearing Dataset - all three tests (~6GB total, do not commit)
+/bearing_data/
+
+# Trained model file - regenerate by running 01_model_development/train_isolation_forest.py
+02_system/models/isolation_forest_model.pkl
+
+# Docker volumes
+02_system/docker/volumes/
+
+# Results are committed intentionally as evidence of ML performance
+# Uncomment below to ignore them:
+# 01_model_development/results/training_results.csv
+# 01_model_development/results/anomaly_analysis.png
+>>>>>>> Stashed changes
