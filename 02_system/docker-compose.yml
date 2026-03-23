@@ -2,12 +2,10 @@
 # Digital Systems Project - Charles Rodway
 #
 # Services:
-#   rabbitmq  - message broker between raspi containers and backend
-#   backend   - consumes RabbitMQ messages, holds system state, exposes REST API
-#   trainer   - watches lathes.json for new machines, auto-trains models
-#   lathe_1   - simulates Raspberry Pi for Lathe 1 (monitoring mode)
-#   lathe_2   - simulates Raspberry Pi for Lathe 2 (monitoring mode)
-#   lathe_3   - simulates Raspberry Pi for Lathe 3 (monitoring mode)
+#   rabbitmq        - message broker between raspi containers and backend
+#   backend         - consumes RabbitMQ messages, holds system state, exposes REST API
+#   lathe_1/2/3     - simulate Raspberry Pi edge devices for CNC lathes (bearing monitoring)
+#   hydraulic_1/2/3 - simulate Raspberry Pi edge devices for hydraulic units
 #
 # The dashboard is a standalone HTML file (dashboard.html in project root).
 # Open it in Chrome while these containers are running.
@@ -57,31 +55,12 @@ services:
       - cnc_network
     restart: unless-stopped
 
-  trainer:
-    build:
-      context: ./src/trainer
-      dockerfile: Dockerfile
-    container_name: trainer
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    volumes:
-      - ./config:/app/config
-      - ./models:/app/models
-      - ./data:/app/data
-      - ../bearing_data:/app/bearing_data:ro
-    environment:
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_USER: admin
-      RABBITMQ_PASS: password
-    networks:
-      - cnc_network
-    restart: unless-stopped
+  # ── CNC Lathe containers (bearing monitoring) ─────────────────────────────
 
   lathe_1:
     build:
       context: ./src/raspi
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile_lathe
     container_name: lathe_1_raspi
     depends_on:
       rabbitmq:
@@ -105,7 +84,7 @@ services:
   lathe_2:
     build:
       context: ./src/raspi
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile_lathe
     container_name: lathe_2_raspi
     depends_on:
       rabbitmq:
@@ -128,7 +107,7 @@ services:
   lathe_3:
     build:
       context: ./src/raspi
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile_lathe
     container_name: lathe_3_raspi
     depends_on:
       rabbitmq:
@@ -140,6 +119,74 @@ services:
       - ./data:/app/data
     environment:
       LATHE_NAME: lathe_3
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: password
+      STREAM_DELAY: "0.5"
+    networks:
+      - cnc_network
+    restart: unless-stopped
+
+  # ── Hydraulic unit containers ─────────────────────────────────────────────
+
+  hydraulic_1:
+    build:
+      context: ./src/raspi
+      dockerfile: Dockerfile_hydraulic
+    container_name: hydraulic_1_raspi
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config
+      - ./models/hydraulic:/app/models/hydraulic:ro
+      - ../../hydraulic_data:/app/hydraulic_data:ro
+    environment:
+      UNIT_NAME: hydraulic_1
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: password
+      STREAM_DELAY: "0.5"
+    networks:
+      - cnc_network
+    restart: unless-stopped
+
+  hydraulic_2:
+    build:
+      context: ./src/raspi
+      dockerfile: Dockerfile_hydraulic
+    container_name: hydraulic_2_raspi
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config
+      - ./models/hydraulic:/app/models/hydraulic:ro
+      - ../../hydraulic_data:/app/hydraulic_data:ro
+    environment:
+      UNIT_NAME: hydraulic_2
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: password
+      STREAM_DELAY: "0.5"
+    networks:
+      - cnc_network
+    restart: unless-stopped
+
+  hydraulic_3:
+    build:
+      context: ./src/raspi
+      dockerfile: Dockerfile_hydraulic
+    container_name: hydraulic_3_raspi
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config
+      - ./models/hydraulic:/app/models/hydraulic:ro
+      - ../../hydraulic_data:/app/hydraulic_data:ro
+    environment:
+      UNIT_NAME: hydraulic_3
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: admin
       RABBITMQ_PASS: password

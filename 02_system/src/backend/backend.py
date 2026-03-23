@@ -1,17 +1,22 @@
 # Backend Service
 # Digital Systems Project - Charles Rodway
 #
-# Consumes messages from all lathe RabbitMQ exchanges.
-# Holds the latest state and reading history for every lathe in memory.
+# Consumes messages from all lathe and hydraulic unit RabbitMQ exchanges.
+# Holds the latest state and reading history for every machine in memory.
 # Logs CRITICAL alerts to a persistent JSON file.
 # Exposes a REST API that the dashboard reads from.
 #
-# Endpoints:
-#   GET /health              - backend health check
-#   GET /state               - full system state (latest reading per lathe)
-#   GET /state/{lathe}       - single lathe latest state
-#   GET /history/{lathe}     - last N readings for a lathe (for charts)
-#   GET /alerts              - all CRITICAL alerts logged so far
+# Bearing endpoints:
+#   GET /health                    - backend health check
+#   GET /state                     - full bearing system state (all lathes)
+#   GET /state/{lathe}             - single lathe latest state
+#   GET /history/{lathe}           - last N readings for a lathe
+#   GET /alerts                    - all CRITICAL bearing alerts logged
+#
+# Hydraulic endpoints:
+#   GET /hydraulic/state           - full hydraulic system state (all units)
+#   GET /hydraulic/state/{unit}    - single hydraulic unit latest state
+#   GET /hydraulic/history/{unit}  - last N cycle readings for a unit
 
 import os
 import json
@@ -25,29 +30,29 @@ import pika
 import uvicorn
 
 
-# settings
+# ── Settings ─────────────────────────────────────────────────────────────────
 
 RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "localhost")
 RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "admin")
 RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "password")
-CONFIG_PATH = "/app/config/lathes.json"
-ALERTS_PATH = "/app/config/alerts.json"
+CONFIG_PATH      = "/app/config/lathes.json"
+HYDRAULIC_CONFIG = "/app/config/hydraulics.json"
+ALERTS_PATH      = "/app/config/alerts.json"
 
-# how many readings to keep in memory per lathe for the history charts
 HISTORY_LENGTH = 500
 
 
-# shared state - updated by consumer threads, read by API endpoints
+# ── Shared state ──────────────────────────────────────────────────────────────
 
-system_state = {}
-# deque automatically drops oldest readings once max length is reached
-reading_history = {}
+system_state      = {}
+reading_history   = {}
+hydraulic_state   = {}
+hydraulic_history = {}
 maintenance_alerts = []
 state_lock = threading.Lock()
 
 
-# clear alerts on startup - since we replay the same dataset each run,
-# persisting old alerts would cause duplicates to accumulate over time
+# ── Alerts ────────────────────────────────────────────────────────────────────
 
 def load_alerts():
     global maintenance_alerts
@@ -67,7 +72,7 @@ def save_alerts():
         print(f"Could not save alerts: {e}")
 
 
-# fastapi app
+# ── FastAPI app ───────────────────────────────────────────────────────────────
 
 app = FastAPI(title="CNC Predictive Maintenance Backend")
 
@@ -78,6 +83,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ── Bearing endpoints ─────────────────────────────────────────────────────────
 
 @app.get("/health")
 def health():
@@ -100,7 +107,6 @@ def get_lathe_state(lathe_name: str):
 
 @app.get("/history/{lathe_name}")
 def get_lathe_history(lathe_name: str, n: int = 200):
-    # returns the last n readings for a lathe, used for the history charts
     with state_lock:
         if lathe_name not in reading_history:
             return []
@@ -110,14 +116,38 @@ def get_lathe_history(lathe_name: str, n: int = 200):
 
 @app.get("/alerts")
 def get_alerts():
-    # returns all logged CRITICAL alerts, newest first
     with state_lock:
         return list(reversed(maintenance_alerts))
 
 
-# rabbitmq message handler - called for every message received
+# ── Hydraulic endpoints ───────────────────────────────────────────────────────
 
-def on_message(ch, method, properties, body):
+@app.get("/hydraulic/state")
+def get_hydraulic_state():
+    with state_lock:
+        return dict(hydraulic_state)
+
+
+@app.get("/hydraulic/state/{unit_name}")
+def get_hydraulic_unit_state(unit_name: str):
+    with state_lock:
+        if unit_name not in hydraulic_state:
+            raise HTTPException(status_code=404, detail=f"{unit_name} not found")
+        return hydraulic_state[unit_name]
+
+
+@app.get("/hydraulic/history/{unit_name}")
+def get_hydraulic_history(unit_name: str, n: int = 100):
+    with state_lock:
+        if unit_name not in hydraulic_history:
+            return []
+        history = list(hydraulic_history[unit_name])
+        return history[-n:] if len(history) > n else history
+
+
+# ── Bearing message handler ───────────────────────────────────────────────────
+
+def on_bearing_message(ch, method, properties, body):
     try:
         message = json.loads(body)
         lathe = message.get("lathe")
@@ -125,97 +155,102 @@ def on_message(ch, method, properties, body):
             return
 
         with state_lock:
-            # update latest state
             system_state[lathe] = message
 
-            # add to history for charts
             if lathe not in reading_history:
                 reading_history[lathe] = deque(maxlen=HISTORY_LENGTH)
 
-            # store a compact version of the reading for the history chart
             history_entry = {
-                "reading": message.get("reading"),
-                "timestamp": message.get("timestamp"),
+                "reading":        message.get("reading"),
+                "timestamp":      message.get("timestamp"),
                 "machine_status": message.get("machine_status"),
                 "bearings": {
                     b: {
-                        "score": data.get("score"),
-                        "status": data.get("status"),
+                        "score":    data.get("score"),
+                        "status":   data.get("status"),
                         "kurtosis": data.get("kurtosis"),
-                        "rms": data.get("rms"),
-                        "streak": data.get("streak")
+                        "rms":      data.get("rms"),
+                        "streak":   data.get("streak")
                     }
                     for b, data in message.get("bearings", {}).items()
                 }
             }
             reading_history[lathe].append(history_entry)
 
-            # check for new CRITICAL alerts - log them if not already logged
+            # log CRITICAL alerts once per bearing per run
             for bearing_name, bearing_data in message.get("bearings", {}).items():
                 if bearing_data.get("latched") and bearing_data.get("streak", 0) >= 50:
-                    # check if we already logged this alert
                     already_logged = any(
                         a["lathe"] == lathe and a["bearing"] == bearing_name
                         for a in maintenance_alerts
                     )
                     if not already_logged:
                         alert = {
-                            "lathe": lathe,
-                            "bearing": bearing_name,
+                            "lathe":     lathe,
+                            "bearing":   bearing_name,
                             "timestamp": message.get("timestamp"),
-                            "reading": message.get("reading"),
-                            "score": bearing_data.get("score"),
-                            "kurtosis": bearing_data.get("kurtosis"),
-                            "rms": bearing_data.get("rms"),
-                            "resolved": False
+                            "reading":   message.get("reading"),
+                            "score":     bearing_data.get("score"),
+                            "kurtosis":  bearing_data.get("kurtosis"),
+                            "rms":       bearing_data.get("rms"),
+                            "resolved":  False
                         }
                         maintenance_alerts.append(alert)
                         save_alerts()
                         print(f"ALERT logged: {lathe} {bearing_name} CRITICAL")
 
     except Exception as e:
-        print(f"Error processing message: {e}")
+        print(f"Error processing bearing message: {e}")
 
 
-# rabbitmq connection
+# ── Hydraulic message handler ─────────────────────────────────────────────────
 
-def connect_rabbitmq():
-    credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
-    parameters = pika.ConnectionParameters(
-        host=RABBITMQ_HOST,
-        credentials=credentials,
-        heartbeat=60,
-        blocked_connection_timeout=30
-    )
-    for attempt in range(10):
-        try:
-            connection = pika.BlockingConnection(parameters)
-            return connection
-        except Exception as e:
-            print(f"RabbitMQ not ready ({attempt+1}/10)... {e}")
-            time.sleep(5)
-    raise RuntimeError("Could not connect to RabbitMQ")
+def on_hydraulic_message(ch, method, properties, body):
+    try:
+        message = json.loads(body)
+        unit = message.get("unit")
+        if not unit:
+            return
 
+        with state_lock:
+            hydraulic_state[unit] = message
+
+            if unit not in hydraulic_history:
+                hydraulic_history[unit] = deque(maxlen=HISTORY_LENGTH)
+
+            # store compact history entry for trend charts
+            history_entry = {
+                "cycle":      message.get("cycle"),
+                "timestamp":  message.get("timestamp"),
+                "components": message.get("components", {})
+            }
+            hydraulic_history[unit].append(history_entry)
+
+    except Exception as e:
+        print(f"Error processing hydraulic message: {e}")
+
+
+# ── RabbitMQ consumers ────────────────────────────────────────────────────────
 
 def run_consumer_for_lathe(lathe_name):
-    # each lathe gets its own connection and thread so they don't block each other
     credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
-    parameters = pika.ConnectionParameters(
-        host=RABBITMQ_HOST,
-        credentials=credentials,
-        heartbeat=60,
-        blocked_connection_timeout=30
+    parameters  = pika.ConnectionParameters(
+        host=RABBITMQ_HOST, credentials=credentials,
+        heartbeat=60, blocked_connection_timeout=30
     )
     while True:
         try:
             print(f"[{lathe_name}] Connecting to RabbitMQ...")
             connection = pika.BlockingConnection(parameters)
-            channel = connection.channel()
+            channel    = connection.channel()
             channel.exchange_declare(exchange=lathe_name, exchange_type='fanout', durable=True)
-            result = channel.queue_declare(queue='', exclusive=True)
-            queue_name = result.method.queue
-            channel.queue_bind(exchange=lathe_name, queue=queue_name)
-            channel.basic_consume(queue=queue_name, on_message_callback=on_message, auto_ack=True)
+            result     = channel.queue_declare(queue='', exclusive=True)
+            channel.queue_bind(exchange=lathe_name, queue=result.method.queue)
+            channel.basic_consume(
+                queue=result.method.queue,
+                on_message_callback=on_bearing_message,
+                auto_ack=True
+            )
             print(f"[{lathe_name}] Connected. Consuming messages...")
             while True:
                 connection.process_data_events(time_limit=0.1)
@@ -225,9 +260,39 @@ def run_consumer_for_lathe(lathe_name):
             time.sleep(5)
 
 
+def run_consumer_for_hydraulic(unit_name):
+    credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
+    parameters  = pika.ConnectionParameters(
+        host=RABBITMQ_HOST, credentials=credentials,
+        heartbeat=60, blocked_connection_timeout=30
+    )
+    while True:
+        try:
+            print(f"[{unit_name}] Connecting to RabbitMQ...")
+            connection = pika.BlockingConnection(parameters)
+            channel    = connection.channel()
+            channel.exchange_declare(exchange=unit_name, exchange_type='fanout', durable=True)
+            result     = channel.queue_declare(queue='', exclusive=True)
+            channel.queue_bind(exchange=unit_name, queue=result.method.queue)
+            channel.basic_consume(
+                queue=result.method.queue,
+                on_message_callback=on_hydraulic_message,
+                auto_ack=True
+            )
+            print(f"[{unit_name}] Connected. Consuming messages...")
+            while True:
+                connection.process_data_events(time_limit=0.1)
+                time.sleep(0.05)
+        except Exception as e:
+            print(f"[{unit_name}] Consumer error: {e}. Reconnecting in 5s...")
+            time.sleep(5)
+
+
 def start_consumers():
     print("Starting RabbitMQ consumers...")
     time.sleep(5)
+
+    # bearing consumers
     with open(CONFIG_PATH) as f:
         lathes_config = json.load(f)
     count = 0
@@ -242,6 +307,25 @@ def start_consumers():
             t.start()
             count += 1
             print(f"  Started consumer thread for {lathe_name}")
+
+    # hydraulic consumers
+    try:
+        with open(HYDRAULIC_CONFIG) as f:
+            hydraulics_config = json.load(f)
+        for unit_name, config in hydraulics_config.items():
+            if config.get("status") == "monitoring":
+                t = threading.Thread(
+                    target=run_consumer_for_hydraulic,
+                    args=(unit_name,),
+                    daemon=True,
+                    name=f"consumer-{unit_name}"
+                )
+                t.start()
+                count += 1
+                print(f"  Started consumer thread for {unit_name}")
+    except FileNotFoundError:
+        print("  No hydraulics.json found — skipping hydraulic consumers")
+
     print(f"Started {count} consumer threads.")
 
 

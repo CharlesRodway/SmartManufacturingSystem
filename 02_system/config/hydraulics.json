@@ -1,0 +1,26 @@
+{
+  "hydraulic_1": {
+    "display_name": "Hydraulic Unit 1",
+    "status": "monitoring",
+    "model_bundle": "Model_H1_bundle.pkl",
+    "data_source": "uci_hydraulic",
+    "dataset_path": "hydraulic_data",
+    "registered_at": "2024-01-01T00:00:00"
+  },
+  "hydraulic_2": {
+    "display_name": "Hydraulic Unit 2",
+    "status": "monitoring",
+    "model_bundle": "Model_H2_bundle.pkl",
+    "data_source": "uci_hydraulic",
+    "dataset_path": "hydraulic_data",
+    "registered_at": "2024-01-01T00:00:00"
+  },
+  "hydraulic_3": {
+    "display_name": "Hydraulic Unit 3",
+    "status": "monitoring",
+    "model_bundle": "Model_H3_bundle.pkl",
+    "data_source": "uci_hydraulic",
+    "dataset_path": "hydraulic_data",
+    "registered_at": "2024-01-01T00:00:00"
+  }
+}
