@@ -140,7 +140,7 @@ services:
     volumes:
       - ./config:/app/config
       - ./models/hydraulic:/app/models/hydraulic:ro
-      - ../../hydraulic_data:/app/hydraulic_data:ro
+      - ../hydraulic_data:/app/hydraulic_data:ro
     environment:
       UNIT_NAME: hydraulic_1
       RABBITMQ_HOST: rabbitmq
@@ -162,7 +162,7 @@ services:
     volumes:
       - ./config:/app/config
       - ./models/hydraulic:/app/models/hydraulic:ro
-      - ../../hydraulic_data:/app/hydraulic_data:ro
+      - ../hydraulic_data:/app/hydraulic_data:ro
     environment:
       UNIT_NAME: hydraulic_2
       RABBITMQ_HOST: rabbitmq
@@ -184,7 +184,7 @@ services:
     volumes:
       - ./config:/app/config
       - ./models/hydraulic:/app/models/hydraulic:ro
-      - ../../hydraulic_data:/app/hydraulic_data:ro
+      - ../hydraulic_data:/app/hydraulic_data:ro
     environment:
       UNIT_NAME: hydraulic_3
       RABBITMQ_HOST: rabbitmq

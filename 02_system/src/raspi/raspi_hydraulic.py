@@ -118,10 +118,16 @@ def run_inference(bundle, features):
         global_idx = model._local_to_global[local_pred]
         raw_val    = int(le.classes_[global_idx])
         label      = labels_map[component].get(raw_val, str(raw_val))
+
+        # get class probabilities for confidence score
+        proba      = model.predict_proba(X_scaled)[0]
+        confidence = float(round(float(np.max(proba)) * 100, 1))
+
         results[component] = {
-            "raw_value": raw_val,
-            "label":     label,
-            "status":    classify_severity(component, raw_val)
+            "raw_value":  raw_val,
+            "label":      label,
+            "status":     classify_severity(component, raw_val),
+            "confidence": confidence
         }
     return results
 
@@ -203,13 +209,24 @@ def run():
             components = run_inference(bundle, features)
             status     = overall_status(components)
 
+            # key sensor readings for dashboard display
+            sensors = {
+                "pressure_bar":    round(features['PS1_mean'], 2),
+                "flow_lpm":        round(features['FS1_mean'], 2),
+                "temperature_c":   round(features['TS1_mean'], 2),
+                "vibration_mms":   round(features['VS1_mean'], 3),
+                "cooling_eff_pct": round(features['CE_mean'], 2),
+                "motor_power_w":   round(features['EPS1_mean'], 1),
+            }
+
             message = {
                 "unit":        UNIT_NAME,
                 "cycle":       cycle_num,
                 "total":       total,
                 "timestamp":   datetime.now().isoformat(),
                 "unit_status": status,
-                "components":  components
+                "components":  components,
+                "sensors":     sensors
             }
 
             publish(channel, message)
