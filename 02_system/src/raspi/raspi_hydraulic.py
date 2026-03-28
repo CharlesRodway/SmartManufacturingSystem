@@ -5,15 +5,14 @@
 # Replays the UCI Hydraulic Systems dataset cycle by cycle, runs inference
 # using the pre-trained XGBoost bundle, and publishes results to RabbitMQ.
 #
-# NOTE: standalone edge simulation script, superseded by the Docker-based
-# implementation in 02_system/. Retained for reference and isolated testing.
-#
 # Environment variables:
 #   UNIT_NAME        - e.g. hydraulic_1
 #   RABBITMQ_HOST    - hostname of RabbitMQ broker
 #   RABBITMQ_USER    - RabbitMQ username
 #   RABBITMQ_PASS    - RabbitMQ password
 #   STREAM_DELAY     - seconds between cycles (default 0.5)
+#   UNIT_SEQUENCE    - comma-separated cycle indices to replay in order
+#                      if not set, streams all stable cycles in dataset order
 
 import os
 import json
@@ -32,12 +31,12 @@ RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "localhost")
 RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "admin")
 RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "password")
 STREAM_DELAY  = float(os.environ.get("STREAM_DELAY", "0.5"))
+UNIT_SEQUENCE = os.environ.get("UNIT_SEQUENCE", "")
 
-CONFIG_PATH  = Path("/app/config/hydraulics.json")
-MODELS_DIR   = Path("/app/models/hydraulic")
-DATA_DIR     = Path("/app/hydraulic_data")
+CONFIG_PATH = Path("/app/config/hydraulics.json")
+MODELS_DIR  = Path("/app/models/hydraulic")
+DATA_DIR    = Path("/app/hydraulic_data")
 
-# UCI sensor definitions — must match hydraulic_classifier.ipynb
 SENSORS = [
     ('PS1',  100, 6000), ('PS2',  100, 6000), ('PS3',  100, 6000),
     ('PS4',  100, 6000), ('PS5',  100, 6000), ('PS6',  100, 6000),
@@ -49,8 +48,6 @@ SENSORS = [
 COMPONENTS = ['cooler', 'valve', 'pump', 'accumulator']
 
 
-# ── Load config ───────────────────────────────────────────────────────────────
-
 def load_config():
     with open(CONFIG_PATH) as f:
         config = json.load(f)
@@ -59,8 +56,6 @@ def load_config():
     return config[UNIT_NAME]
 
 
-# ── Load model bundle ─────────────────────────────────────────────────────────
-
 def load_bundle(bundle_name):
     path = MODELS_DIR / bundle_name
     with open(path, 'rb') as f:
@@ -68,8 +63,6 @@ def load_bundle(bundle_name):
     print(f"[{UNIT_NAME}] Loaded model bundle: {bundle_name}")
     return bundle
 
-
-# ── Load sensor data ──────────────────────────────────────────────────────────
 
 def load_sensor_data():
     print(f"[{UNIT_NAME}] Loading sensor files...")
@@ -84,8 +77,6 @@ def load_sensor_data():
     return raw, profile
 
 
-#Feature extraction 
-
 def extract_features(raw_sensors, cycle_idx):
     row = {}
     for name, hz, pts in SENSORS:
@@ -98,8 +89,6 @@ def extract_features(raw_sensors, cycle_idx):
     return row
 
 
-# Run inference 
-
 def run_inference(bundle, features):
     scaler        = bundle['scaler']
     models        = bundle['component_models']
@@ -107,7 +96,7 @@ def run_inference(bundle, features):
     labels_map    = bundle['component_labels']
     feature_names = bundle['feature_names']
 
-    X = np.array([[features[f] for f in feature_names]])
+    X        = np.array([[features[f] for f in feature_names]])
     X_scaled = scaler.transform(X)
 
     results = {}
@@ -118,8 +107,6 @@ def run_inference(bundle, features):
         global_idx = model._local_to_global[local_pred]
         raw_val    = int(le.classes_[global_idx])
         label      = labels_map[component].get(raw_val, str(raw_val))
-
-        # get class probabilities for confidence score
         proba      = model.predict_proba(X_scaled)[0]
         confidence = float(round(float(np.max(proba)) * 100, 1))
 
@@ -133,11 +120,10 @@ def run_inference(bundle, features):
 
 
 def classify_severity(component, raw_value):
-    """Map raw condition value to a severity status."""
     thresholds = {
-        'cooler':      {3: 'CRITICAL', 20: 'WARNING', 100: 'HEALTHY'},
+        'cooler':      {3: 'CRITICAL', 20: 'WARNING',  100: 'HEALTHY'},
         'valve':       {73: 'CRITICAL', 80: 'WARNING', 90: 'WARNING', 100: 'HEALTHY'},
-        'pump':        {0: 'HEALTHY', 1: 'WARNING', 2: 'CRITICAL'},
+        'pump':        {0: 'HEALTHY',  1: 'WARNING',   2: 'CRITICAL'},
         'accumulator': {90: 'CRITICAL', 100: 'WARNING', 115: 'WARNING', 130: 'HEALTHY'},
     }
     return thresholds.get(component, {}).get(raw_value, 'HEALTHY')
@@ -145,14 +131,10 @@ def classify_severity(component, raw_value):
 
 def overall_status(components):
     statuses = [c['status'] for c in components.values()]
-    if 'CRITICAL' in statuses:
-        return 'CRITICAL'
-    if 'WARNING' in statuses:
-        return 'WARNING'
+    if 'CRITICAL' in statuses: return 'CRITICAL'
+    if 'WARNING'  in statuses: return 'WARNING'
     return 'HEALTHY'
 
-
-# RabbitMQ 
 
 def connect_rabbitmq():
     credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
@@ -180,22 +162,26 @@ def publish(channel, message):
     )
 
 
-#Main stream loop 
-
 def run():
     print(f"\n{'='*50}")
     print(f"HYDRAULIC UNIT SIMULATOR — {UNIT_NAME}")
     print(f"{'='*50}")
 
-    config     = load_config()
-    bundle     = load_bundle(config['model_bundle'])
+    config       = load_config()
+    bundle       = load_bundle(config['model_bundle'])
     raw, profile = load_sensor_data()
 
-    # filter to stable cycles only — matches training
-    stable_mask = profile['stable'] == 0
-    stable_indices = profile.index[stable_mask].tolist()
-    total = len(stable_indices)
-    print(f"[{UNIT_NAME}] {total} stable cycles to stream")
+    # use a custom sequence if provided, otherwise stream all stable cycles
+    if UNIT_SEQUENCE:
+        cycle_indices = [int(i) for i in UNIT_SEQUENCE.split(',') if i.strip()]
+        print(f"[{UNIT_NAME}] Using custom sequence: {len(cycle_indices)} cycles")
+        print(f"[{UNIT_NAME}] Story: {os.environ.get('UNIT_STORY', 'custom sequence')}")
+    else:
+        stable_mask   = profile['stable'] == 0
+        cycle_indices = profile.index[stable_mask].tolist()
+        print(f"[{UNIT_NAME}] Using full dataset: {len(cycle_indices)} stable cycles")
+
+    total = len(cycle_indices)
 
     connection = connect_rabbitmq()
     channel    = connection.channel()
@@ -203,19 +189,18 @@ def run():
 
     print(f"[{UNIT_NAME}] Starting stream (delay={STREAM_DELAY}s per cycle)...")
 
-    for cycle_num, cycle_idx in enumerate(stable_indices, start=1):
+    for cycle_num, cycle_idx in enumerate(cycle_indices, start=1):
         try:
             features   = extract_features(raw, cycle_idx)
             components = run_inference(bundle, features)
             status     = overall_status(components)
 
-            # key sensor readings for dashboard display
             sensors = {
                 "pressure_bar":    round(features['PS1_mean'], 2),
                 "flow_lpm":        round(features['FS1_mean'], 2),
                 "temperature_c":   round(features['TS1_mean'], 2),
                 "vibration_mms":   round(features['VS1_mean'], 3),
-                "cooling_eff_pct": round(features['CE_mean'], 2),
+                "cooling_eff_pct": round(features['CE_mean'],  2),
                 "motor_power_w":   round(features['EPS1_mean'], 1),
             }
 
@@ -231,7 +216,7 @@ def run():
 
             publish(channel, message)
 
-            if cycle_num % 50 == 0 or status in ('WARNING', 'CRITICAL'):
+            if cycle_num % 10 == 0 or status in ('WARNING', 'CRITICAL'):
                 comp_summary = ' | '.join(
                     f"{c}: {v['label']}" for c, v in components.items()
                 )

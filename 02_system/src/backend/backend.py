@@ -226,6 +226,28 @@ def on_hydraulic_message(ch, method, properties, body):
             }
             hydraulic_history[unit].append(history_entry)
 
+            # log CRITICAL hydraulic alerts once per component per run
+            if message.get("unit_status") == "CRITICAL":
+                for comp_name, comp_data in message.get("components", {}).items():
+                    if comp_data.get("status") == "CRITICAL":
+                        already_logged = any(
+                            a.get("unit") == unit and a.get("component") == comp_name
+                            for a in maintenance_alerts
+                        )
+                        if not already_logged:
+                            alert = {
+                                "type":      "hydraulic",
+                                "unit":      unit,
+                                "component": comp_name,
+                                "label":     comp_data.get("label", "Unknown"),
+                                "timestamp": message.get("timestamp"),
+                                "cycle":     message.get("cycle"),
+                                "resolved":  False
+                            }
+                            maintenance_alerts.append(alert)
+                            save_alerts()
+                            print(f"ALERT logged: {unit} {comp_name} CRITICAL ({comp_data.get('label')})")
+
     except Exception as e:
         print(f"Error processing hydraulic message: {e}")
 

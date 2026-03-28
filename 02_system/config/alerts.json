@@ -1,32 +1,29 @@
 [
   {
-    "lathe": "lathe_1",
-    "bearing": "bearing4",
-    "timestamp": "2026-03-28T14:32:33.929764",
-    "reading": 883,
-    "score": -0.0583,
-    "kurtosis": 7.536,
-    "rms": 0.1624,
+    "type": "hydraulic",
+    "unit": "hydraulic_2",
+    "component": "pump",
+    "label": "Severe leakage",
+    "timestamp": "2026-03-28T21:51:18.797776",
+    "cycle": 21,
     "resolved": false
   },
   {
-    "lathe": "lathe_1",
-    "bearing": "bearing3",
-    "timestamp": "2026-03-28T14:33:38.135054",
-    "reading": 1152,
-    "score": -0.1203,
-    "kurtosis": 5.774,
-    "rms": 0.173,
+    "type": "hydraulic",
+    "unit": "hydraulic_1",
+    "component": "valve",
+    "label": "Near failure",
+    "timestamp": "2026-03-28T21:51:33.765676",
+    "cycle": 31,
     "resolved": false
   },
   {
-    "lathe": "lathe_2",
-    "bearing": "bearing1",
-    "timestamp": "2026-03-28T14:34:17.495042",
-    "reading": 534,
-    "score": -0.1316,
-    "kurtosis": 2.349,
-    "rms": 0.1652,
+    "type": "hydraulic",
+    "unit": "hydraulic_3",
+    "component": "cooler",
+    "label": "Near failure",
+    "timestamp": "2026-03-28T21:51:34.570042",
+    "cycle": 31,
     "resolved": false
   }
 ]

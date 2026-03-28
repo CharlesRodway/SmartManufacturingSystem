@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CNC Predictive Maintenance — Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #f2f2ee;
+  --surface:   #ffffff;
+  --border:    #ddddd8;
+  --text:      #111111;
+  --muted:     #777770;
+  --critical:  #ba1b1b;
+  --critical-bg: #fce8e8;
+  --mono:      'IBM Plex Mono', monospace;
+  --sans:      'IBM Plex Sans', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 36px 40px;
+  width: 340px;
+}
+
+.login-brand {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.login-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 28px;
+}
+
+label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+  margin-top: 14px;
+}
+
+input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--sans);
+  font-size: 0.88rem;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.1s;
+}
+
+input:focus { border-color: #999; }
+
+button {
+  width: 100%;
+  margin-top: 22px;
+  padding: 10px;
+  background: #111;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+button:hover { background: #333; }
+
+.error-msg {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  padding: 8px 10px;
+  border-radius: 3px;
+  margin-top: 12px;
+  background: var(--critical-bg);
+  color: var(--critical);
+  display: none;
+}
+
+.login-footer {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--muted);
+  margin-top: 20px;
+  text-align: center;
+  line-height: 1.6;
+}
+</style>
+</head>
+<body>
+
+<div class="login-box">
+  <div class="login-brand">CNC Predictive Maintenance</div>
+  <div class="login-title">Sign in</div>
+
+  <label>Username</label>
+  <input type="text" id="username" placeholder="username" autocomplete="username">
+
+  <label>Password</label>
+  <input type="password" id="password" placeholder="password" autocomplete="current-password"
+         onkeydown="if(event.key==='Enter') login()">
+
+  <button onclick="login()">Sign in</button>
+
+  <div class="error-msg" id="error-msg">Invalid username or password.</div>
+</div>
+
+<div class="login-footer">
+  Digital Systems Project — Charles Rodway, UWE Bristol<br>
+  Demo credentials: supervisor / admin123 &nbsp;|&nbsp; maintenance / maint123
+</div>
+
+<script>
+// credentials are hardcoded for demonstration purposes
+// a production deployment would use a proper authentication service
+const USERS = {
+    supervisor:   { password: 'admin123',  role: 'supervisor'   },
+    maintenance:  { password: 'maint123',  role: 'maintenance'  },
+};
+
+function login() {
+    const username = document.getElementById('username').value.trim().toLowerCase();
+    const password = document.getElementById('password').value;
+    const errEl    = document.getElementById('error-msg');
+
+    const user = USERS[username];
+    if (!user || user.password !== password) {
+        errEl.style.display = 'block';
+        document.getElementById('password').value = '';
+        return;
+    }
+
+    // store role in sessionStorage — clears when browser tab is closed
+    sessionStorage.setItem('cnc_role', user.role);
+    sessionStorage.setItem('cnc_user', username);
+
+    // redirect based on role
+    if (user.role === 'supervisor') {
+        window.location.href = '/dashboard.html';
+    } else {
+        window.location.href = '/maintenance.html';
+    }
+}
+</script>
+</body>
+</html>

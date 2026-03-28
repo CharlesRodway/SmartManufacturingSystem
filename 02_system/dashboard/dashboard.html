@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<!--
+  CNC Predictive Maintenance Dashboard — Supervisor View
+  Digital Systems Project - Charles Rodway
+
+  Served by nginx at http://localhost:3000
+  Requires login — redirects to login.html if not authenticated
+
+  Machine types are defined in machines/lathe.js and machines/hydraulic.js
+  To add a new machine type create a new file in machines/ and import it below
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CNC Predictive Maintenance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:#f2f2ee;--surface:#ffffff;--surface2:#f8f8f5;--border:#ddddd8;
+  --text:#111111;--muted:#777770;--healthy:#1a7a3c;--healthy-bg:#e6f4ec;
+  --warning:#9a5a00;--warning-bg:#fff3d6;--critical:#ba1b1b;--critical-bg:#fce8e8;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);height:100vh;display:grid;grid-template-rows:48px 1fr;overflow:hidden;}
+#topbar{background:#111;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 20px;flex-shrink:0;}
+#topbar .brand{font-family:var(--mono);font-size:0.78rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;}
+#topbar .brand span{color:#666;font-weight:400;margin-left:12px;font-size:0.7rem;}
+#topbar .top-right{display:flex;gap:12px;align-items:center;}
+.pill{font-family:var(--mono);font-size:0.65rem;padding:3px 8px;border-radius:2px;border:1px solid #333;color:#666;letter-spacing:0.05em;}
+.pill.ok{border-color:#1a7a3c;color:#4caf7d;}.pill.err{border-color:#ba1b1b;color:#ef5350;}
+.logout-btn{font-family:var(--mono);font-size:0.62rem;padding:3px 8px;border-radius:2px;border:1px solid #444;color:#888;background:none;cursor:pointer;letter-spacing:0.05em;}
+.logout-btn:hover{color:#fff;border-color:#666;}
+#clock{font-family:var(--mono);font-size:0.72rem;color:#555;}
+#main{display:grid;grid-template-columns:240px 1fr 300px;overflow:hidden;}
+.panel{background:var(--surface);display:flex;flex-direction:column;overflow:hidden;}
+#left-panel{border-right:1px solid var(--border);}
+#right-panel{border-left:1px solid var(--border);}
+#centre-panel{background:var(--bg);overflow-y:auto;}
+.panel-hdr{padding:11px 14px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:0.62rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
+.panel-hdr strong{color:var(--text);}
+.scroll{flex:1;overflow-y:auto;}
+::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+#heatmap-section{padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0;}
+#heatmap-label{font-family:var(--mono);font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;}
+.hm-row{display:flex;gap:3px;align-items:center;margin-bottom:3px;}
+.hm-lathe-label{font-family:var(--mono);font-size:0.6rem;color:var(--muted);width:48px;flex-shrink:0;text-align:right;padding-right:5px;}
+.hm-cell{flex:1;height:20px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:0.55rem;font-weight:600;letter-spacing:0.02em;transition:background 0.4s;}
+.hm-cell.healthy{background:var(--healthy-bg);color:var(--healthy);border:1px solid #b8dfc5;}
+.hm-cell.warning{background:var(--warning-bg);color:var(--warning);border:1px solid #f0d090;}
+.hm-cell.critical{background:var(--critical-bg);color:var(--critical);border:1px solid #f0b0b0;animation:blink 1.4s infinite;}
+.hm-cell.no-data{background:#f0f0ec;color:var(--muted);border:1px solid var(--border);}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.55}}
+#machine-list{padding:8px;}
+.mc{border:1px solid var(--border);border-left:3px solid var(--border);border-radius:3px;padding:10px 12px;margin-bottom:5px;cursor:pointer;background:var(--surface);transition:border-color 0.1s,background 0.1s;}
+.mc:hover{border-color:#aaa;border-left-color:inherit;}.mc.selected{background:var(--surface2);border-color:#999;}
+.mc.healthy{border-left-color:var(--healthy);}.mc.warning{border-left-color:#e08000;}.mc.critical{border-left-color:var(--critical);}
+.mc-name{font-weight:600;font-size:0.84rem;margin-bottom:3px;}
+.mc-status{font-family:var(--mono);font-size:0.67rem;font-weight:600;letter-spacing:0.04em;margin-bottom:5px;}
+.mc-status.healthy{color:var(--healthy);}.mc-status.warning{color:#e08000;}.mc-status.critical{color:var(--critical);}.mc-status.no-data{color:var(--muted);}
+.mc-bar-bg{background:var(--border);height:2px;border-radius:1px;}.mc-bar{height:2px;border-radius:1px;transition:width 0.4s;}
+.mc-meta{font-family:var(--mono);font-size:0.63rem;color:var(--muted);margin-top:4px;}
+.mc-type{font-family:var(--mono);font-size:0.58rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);padding:1px 5px;border:1px solid var(--border);border-radius:2px;display:inline-block;margin-bottom:3px;}
+#detail-hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:13px 18px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:10;}
+.dh-name{font-size:1rem;font-weight:700;}.dh-sub{font-family:var(--mono);font-size:0.68rem;color:var(--muted);margin-top:2px;}
+.status-badge{font-family:var(--mono);font-size:0.7rem;font-weight:600;letter-spacing:0.06em;padding:5px 14px;border-radius:2px;}
+.status-badge.healthy{background:var(--healthy-bg);color:var(--healthy);border:1px solid #b8dfc5;}
+.status-badge.warning{background:var(--warning-bg);color:var(--warning);border:1px solid #f0d090;}
+.status-badge.critical{background:var(--critical-bg);color:var(--critical);border:1px solid #f0b0b0;animation:pulse 1.2s infinite;}
+.status-badge.no-data{background:#f0f0ec;color:var(--muted);border:1px solid var(--border);}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(186,27,27,0.2)}50%{box-shadow:0 0 0 5px rgba(186,27,27,0)}}
+#detail-progress-wrap{background:var(--surface);border-bottom:1px solid var(--border);padding:6px 18px 10px;display:flex;gap:14px;align-items:center;font-family:var(--mono);font-size:0.67rem;color:var(--muted);}
+#detail-progress-bar-bg{flex:1;background:var(--border);height:3px;border-radius:2px;}
+#detail-progress-bar{height:3px;border-radius:2px;transition:width 0.4s;}
+#bearing-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:14px;}
+.bc{background:var(--surface);border:1px solid var(--border);border-radius:3px;padding:14px;position:relative;}
+.bc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:3px 3px 0 0;}
+.bc.healthy::before{background:var(--healthy);}.bc.warning::before{background:#e08000;}.bc.critical::before{background:var(--critical);}
+.bc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;}
+.bc-name{font-size:0.73rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);}
+.bc-tags{display:flex;gap:4px;}
+.tag{font-family:var(--mono);font-size:0.57rem;padding:1px 5px;border-radius:2px;letter-spacing:0.03em;}
+.tag.latched{background:var(--critical-bg);color:var(--critical);border:1px solid #f0b0b0;}
+.bc-metrics{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+.bc-metric label{display:block;font-size:0.59rem;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);margin-bottom:1px;}
+.bc-metric .val{font-family:var(--mono);font-size:0.79rem;font-weight:600;}
+.val.neg{color:var(--critical);}.val.pos{color:var(--healthy);}.val.warn{color:#e08000;}
+.spark-bar-wrap{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
+.spark-label{font-family:var(--mono);font-size:0.59rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:4px;display:flex;justify-content:space-between;}
+.spark-bars{display:flex;gap:2px;height:20px;align-items:flex-end;}
+.spark-bar{flex:1;border-radius:1px 1px 0 0;min-height:2px;}
+#hydraulic-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:14px;}
+.hc{background:var(--surface);border:1px solid var(--border);border-radius:3px;padding:14px;position:relative;}
+.hc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:3px 3px 0 0;}
+.hc.healthy::before{background:var(--healthy);}.hc.warning::before{background:#e08000;}.hc.critical::before{background:var(--critical);}
+.hc-name{font-size:0.73rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);margin-bottom:8px;}
+.hc-condition{font-family:var(--mono);font-size:0.82rem;font-weight:600;padding:6px 10px;border-radius:2px;text-align:center;border:1px solid var(--border);background:var(--surface2);color:var(--muted);margin-bottom:8px;}
+.hc-condition.healthy{background:var(--healthy-bg);color:var(--healthy);border-color:#b8dfc5;}
+.hc-condition.warning{background:var(--warning-bg);color:var(--warning);border-color:#f0d090;}
+.hc-condition.critical{background:var(--critical-bg);color:var(--critical);border-color:#f0b0b0;animation:blink 1.4s infinite;}
+.hc-confidence{font-family:var(--mono);font-size:0.62rem;color:var(--muted);text-align:center;letter-spacing:0.05em;}
+#hyd-sensors{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 14px 14px;}
+.hyd-sensor{background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:8px 10px;}
+.hyd-sensor label{display:block;font-size:0.58rem;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);margin-bottom:2px;}
+.hyd-sensor .val{font-family:var(--mono);font-size:0.82rem;font-weight:600;color:var(--text);}
+.hyd-sensor .unit{font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:2px;}
+#right-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
+.rtab{flex:1;padding:10px 4px;font-family:var(--mono);font-size:0.58rem;letter-spacing:0.07em;text-transform:uppercase;text-align:center;cursor:pointer;color:var(--muted);border:none;border-bottom:2px solid transparent;background:none;transition:all 0.1s;}
+.rtab.active{color:var(--text);border-bottom-color:var(--text);}.rtab:hover{color:var(--text);}
+.rtab-content{display:none;flex:1;overflow:hidden;flex-direction:column;}.rtab-content.active{display:flex;}
+#event-log{flex:1;overflow-y:auto;padding:8px;font-family:var(--mono);font-size:0.7rem;line-height:1.7;}
+.log-entry{padding:4px 8px;border-radius:2px;margin-bottom:3px;display:flex;gap:8px;animation:fadein 0.3s ease;}
+@keyframes fadein{from{opacity:0;transform:translateY(-3px)}to{opacity:1}}
+.log-time{color:var(--muted);flex-shrink:0;font-size:0.64rem;}
+.log-entry.critical{background:var(--critical-bg);color:var(--critical);}
+.log-entry.warning{background:var(--warning-bg);color:var(--warning);}
+.log-entry.healthy{background:var(--healthy-bg);color:var(--healthy);}
+.log-entry.info{color:var(--muted);}
+#history-wrap{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:10px;}
+.hist-box{background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:10px;}
+.hist-box label{font-family:var(--mono);font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px;}
+#alert-list{flex:1;overflow-y:auto;padding:8px;}
+.alert-item{border:1px solid #f0b0b0;border-left:3px solid var(--critical);border-radius:2px;padding:10px 12px;margin-bottom:6px;}
+.alert-item .ai-title{font-weight:600;color:var(--critical);font-size:0.8rem;margin-bottom:4px;}
+.alert-item .ai-meta{font-family:var(--mono);font-size:0.65rem;color:var(--muted);line-height:1.7;}
+#register-wrap{flex:1;overflow-y:auto;padding:12px;}
+#register-wrap label{display:block;font-family:var(--mono);font-size:0.62rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:3px;margin-top:8px;}
+#register-wrap input,#register-wrap select{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:3px;font-family:var(--sans);font-size:0.82rem;background:var(--bg);color:var(--text);}
+#register-wrap button{width:100%;margin-top:12px;padding:9px;background:var(--text);color:white;border:none;border-radius:3px;font-family:var(--mono);font-size:0.75rem;letter-spacing:0.06em;cursor:pointer;}
+#register-wrap button:hover{background:#333;}
+.form-msg{font-family:var(--mono);font-size:0.72rem;padding:7px 10px;border-radius:3px;margin-top:8px;}
+.form-msg.ok{background:var(--healthy-bg);color:var(--healthy);}.form-msg.err{background:var(--critical-bg);color:var(--critical);}
+.no-data-msg{color:var(--muted);font-family:var(--mono);font-size:0.75rem;padding:20px;text-align:center;}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="brand">CNC Predictive Maintenance <span>Digital Systems Project — Charles Rodway</span></div>
+  <div class="top-right">
+    <div class="pill" id="backend-pill">CONNECTING</div>
+    <div id="clock">--:--:--</div>
+    <button class="logout-btn" onclick="logout()">Sign out</button>
+  </div>
+</div>
+
+<div id="main">
+  <div class="panel" id="left-panel">
+    <div class="panel-hdr"><span>Fleet Overview</span><strong id="machine-count">0</strong></div>
+    <div id="heatmap-section">
+      <div id="heatmap-label">Fleet Overview</div>
+      <div id="heatmap-grid"></div>
+    </div>
+    <div class="scroll"><div id="machine-list"></div></div>
+  </div>
+
+  <div id="centre-panel">
+    <div id="detail-hdr">
+      <div>
+        <div class="dh-name" id="dh-name">Select a machine</div>
+        <div class="dh-sub"  id="dh-sub">—</div>
+      </div>
+      <div class="status-badge no-data" id="dh-badge">NO DATA</div>
+    </div>
+    <div id="detail-progress-wrap">
+      <span id="detail-progress-txt">—</span>
+      <div id="detail-progress-bar-bg"><div id="detail-progress-bar" style="width:0%"></div></div>
+    </div>
+    <div id="bearing-grid"></div>
+    <div id="hydraulic-grid" style="display:none"></div>
+    <div id="hyd-sensors" style="display:none"></div>
+  </div>
+
+  <div class="panel" id="right-panel">
+    <div id="right-tabs">
+      <button class="rtab active" onclick="switchTab('log')">Log</button>
+      <button class="rtab" onclick="switchTab('history')">History</button>
+      <button class="rtab" onclick="switchTab('alerts')">Alerts</button>
+      <button class="rtab" onclick="switchTab('register')">+ New</button>
+    </div>
+    <div class="rtab-content active" id="tab-log">
+      <div class="panel-hdr"><span>System Events</span><strong id="event-count">0</strong></div>
+      <div id="event-log"></div>
+    </div>
+    <div class="rtab-content" id="tab-history">
+      <div class="panel-hdr"><span>Degradation History</span></div>
+      <div id="history-wrap">
+        <div class="hist-box"><label>Anomaly Score</label><canvas id="hist-score" height="90"></canvas></div>
+        <div class="hist-box"><label>Kurtosis</label><canvas id="hist-kurtosis" height="90"></canvas></div>
+        <div class="hist-box"><label>RMS Energy</label><canvas id="hist-rms" height="90"></canvas></div>
+      </div>
+    </div>
+    <div class="rtab-content" id="tab-alerts">
+      <div class="panel-hdr"><span>Critical Alerts</span><strong id="alert-count" style="color:var(--critical)">0</strong></div>
+      <div id="alert-list"></div>
+    </div>
+    <div class="rtab-content" id="tab-register">
+      <div class="panel-hdr"><span>Register New Machine</span></div>
+      <div id="register-wrap">
+        <label>Machine ID</label><input type="text" id="reg-id" placeholder="lathe_4">
+        <label>Display Name</label><input type="text" id="reg-name" placeholder="Lathe 4 — Workshop B">
+        <label>Machine Type</label>
+        <select id="reg-type"><option value="lathe">CNC Lathe</option><option value="hydraulic">Hydraulic Unit</option></select>
+        <button onclick="registerMachine()">Register Machine</button>
+        <div id="reg-msg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/dashboard.js"></script>
+<script src="/machines/lathe.js"></script>
+<script src="/machines/hydraulic.js"></script>
+<script>
+let selectedMachine=null,selectedType=null,liveHistory={};
+let histScoreChart,histKurtChart,histRmsChart;
+
+window.addEventListener('load',()=>{
+  if(!checkAuth('supervisor'))return;
+  startClock();
+  histScoreChart=makeHistChart('hist-score');
+  histKurtChart=makeHistChart('hist-kurtosis');
+  histRmsChart=makeHistChart('hist-rms');
+  addLog('info',`Signed in as ${sessionStorage.getItem('cnc_user')} (supervisor)`);
+  addLog('info','Dashboard initialised. Connecting to backend...');
+  poll();
+});
+
+function switchTab(name){
+  const names=['log','history','alerts','register'];
+  document.querySelectorAll('.rtab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
+  document.querySelectorAll('.rtab-content').forEach(c=>c.classList.toggle('active',c.id===`tab-${name}`));
+  if(name==='history'&&selectedMachine&&selectedType==='lathe'&&liveHistory[selectedMachine])
+    updateHistCharts(liveHistory[selectedMachine]);
+}
+
+function renderMachineList(bs,hs){
+  const lathes=Object.keys(bs),units=Object.keys(hs);
+  document.getElementById('machine-count').textContent=lathes.length+units.length;
+  if(!selectedMachine&&lathes.length>0){selectedMachine=lathes[0];selectedType='lathe';}
+  else if(!selectedMachine&&units.length>0){selectedMachine=units[0];selectedType='hydraulic';}
+  const lm=MachineRegistry.get('lathe'),hm=MachineRegistry.get('hydraulic');
+  let html='';
+  lathes.forEach(n=>{if(lm)html+=lm.renderListItem(n,bs[n],n===selectedMachine&&selectedType==='lathe');});
+  units.forEach(n=>{if(hm)html+=hm.renderListItem(n,hs[n],n===selectedMachine&&selectedType==='hydraulic');});
+  document.getElementById('machine-list').innerHTML=html;
+}
+
+function selectMachine(name,type){
+  selectedMachine=name;selectedType=type;
+  renderMachineList(systemState,hydraulicState);
+  if(type==='lathe'){
+    const mod=MachineRegistry.get('lathe');
+    if(mod)mod.renderDetail(name,systemState[name],liveHistory[name]||[],SPARK_N,STREAK_MAX);
+    fetchHistory(name).then(h=>{
+      liveHistory[name]=h;
+      if(mod)mod.renderDetail(name,systemState[name],h,SPARK_N,STREAK_MAX);
+      if(document.getElementById('tab-history').classList.contains('active'))updateHistCharts(h);
+    });
+  }else{
+    const mod=MachineRegistry.get('hydraulic');
+    if(mod)mod.renderDetail(name,hydraulicState[name]);
+  }
+}
+
+function makeHistChart(id){
+  return new Chart(document.getElementById(id).getContext('2d'),{
+    type:'line',data:{labels:[],datasets:[]},
+    options:{responsive:true,maintainAspectRatio:true,animation:false,
+      plugins:{legend:{labels:{font:{family:'IBM Plex Mono',size:9},color:'#777',boxWidth:8,padding:8}}},
+      scales:{x:{ticks:{font:{family:'IBM Plex Mono',size:8},color:'#aaa',maxTicksLimit:5},grid:{color:'#eee'}},
+              y:{ticks:{font:{family:'IBM Plex Mono',size:8},color:'#aaa'},grid:{color:'#eee'}}}}
+  });
+}
+
+function updateHistCharts(history){
+  const mod=MachineRegistry.get('lathe');
+  if(!mod||!history||history.length===0)return;
+  const data=mod.getHistoryDatasets(history,B_COLOURS);
+  [{chart:histScoreChart,datasets:data.score},{chart:histKurtChart,datasets:data.kurtosis},{chart:histRmsChart,datasets:data.rms}]
+  .forEach(({chart,datasets})=>{if(!chart)return;chart.data.labels=data.labels;chart.data.datasets=datasets;chart.update('none');});
+}
+
+function registerMachine(){
+  const id=document.getElementById('reg-id').value.trim().toLowerCase().replace(/\s+/g,'_');
+  const name=document.getElementById('reg-name').value.trim();
+  const type=document.getElementById('reg-type').value;
+  const msg=document.getElementById('reg-msg');
+  if(!id||!name){msg.className='form-msg err';msg.textContent='Fill in all fields.';return;}
+  const cf=type==='lathe'?'lathes.json':'hydraulics.json';
+  msg.className='form-msg ok';
+  msg.textContent=`Add "${id}" to ${cf} with status: "monitoring" to register.`;
+}
+
+async function poll(){
+  const[state,hydState,alerts]=await Promise.all([fetchState(),fetchHydraulicState(),fetchAlerts()]);
+  if(state){detectChanges(state);systemState=state;}
+  if(hydState)hydraulicState=hydState;
+  renderHeatmap(systemState,hydraulicState);
+  renderMachineList(systemState,hydraulicState);
+  if(selectedMachine&&selectedType==='lathe'&&systemState[selectedMachine]){
+    const history=await fetchHistory(selectedMachine);
+    liveHistory[selectedMachine]=history;
+    const mod=MachineRegistry.get('lathe');
+    if(mod)mod.renderDetail(selectedMachine,systemState[selectedMachine],history,SPARK_N,STREAK_MAX);
+    if(document.getElementById('tab-history').classList.contains('active'))updateHistCharts(history);
+  }else if(selectedMachine&&selectedType==='hydraulic'){
+    const mod=MachineRegistry.get('hydraulic');
+    if(mod)mod.renderDetail(selectedMachine,hydraulicState[selectedMachine]);
+  }
+  renderAlerts(alerts);renderLog();
+  setTimeout(poll,POLL_MS);
+}
+</script>
+</body>
+</html>

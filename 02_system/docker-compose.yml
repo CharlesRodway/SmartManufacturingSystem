@@ -4,16 +4,19 @@
 # Services:
 #   rabbitmq        - message broker between raspi containers and backend
 #   backend         - consumes RabbitMQ messages, holds system state, exposes REST API
+#   dashboard       - nginx serving the modular HTML dashboard at http://localhost:3000
 #   lathe_1/2/3     - simulate Raspberry Pi edge devices for CNC lathes (bearing monitoring)
 #   hydraulic_1/2/3 - simulate Raspberry Pi edge devices for hydraulic units
 #
-# The dashboard is a standalone HTML file (dashboard.html in project root).
-# Open it in Chrome while these containers are running.
-# Dashboard connects to the backend API at http://localhost:8000
+# Hydraulic units use custom cycle sequences to simulate realistic degradation:
+#   hydraulic_1 — valve degrades: optimal -> small lag -> severe lag -> near failure
+#   hydraulic_2 — pump leakage:   none -> weak -> severe leakage
+#   hydraulic_3 — multi-component: cooler + accumulator degrade together
 #
 # Usage:
 #   docker-compose up --build
-#   Then open dashboard.html in Chrome
+#   Open http://localhost:3000 in Chrome
+#   Login: supervisor / admin123  OR  maintenance / maint123
 
 services:
 
@@ -51,6 +54,18 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: admin
       RABBITMQ_PASS: password
+    networks:
+      - cnc_network
+    restart: unless-stopped
+
+  dashboard:
+    image: nginx:alpine
+    container_name: dashboard
+    ports:
+      - "3000:80"
+    volumes:
+      - ./dashboard:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - cnc_network
     restart: unless-stopped
@@ -146,7 +161,9 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: admin
       RABBITMQ_PASS: password
-      STREAM_DELAY: "0.5"
+      STREAM_DELAY: "1.5"
+      UNIT_STORY: "Valve degrades: optimal -> small lag -> severe lag -> near failure"
+      UNIT_SEQUENCE: "1787,1788,1789,1790,1791,1792,1793,1794,1795,1796,1777,1778,1779,1780,1781,1782,1783,1784,1785,1786,1767,1768,1769,1770,1771,1772,1773,1774,1775,1776,1757,1758,1759,1760,1761,1762,1763,1764,1765,1766"
     networks:
       - cnc_network
     restart: unless-stopped
@@ -168,7 +185,9 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: admin
       RABBITMQ_PASS: password
-      STREAM_DELAY: "0.5"
+      STREAM_DELAY: "1.5"
+      UNIT_STORY: "Pump leakage: none -> weak leakage -> severe leakage"
+      UNIT_SEQUENCE: "1787,1788,1789,1790,1791,1792,1793,1794,1795,1796,1746,1747,1748,1749,1750,1751,1752,1753,1754,1755,1705,1706,1707,1708,1709,1710,1711,1712,1713,1714"
     networks:
       - cnc_network
     restart: unless-stopped
@@ -190,7 +209,9 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: admin
       RABBITMQ_PASS: password
-      STREAM_DELAY: "0.5"
+      STREAM_DELAY: "1.5"
+      UNIT_STORY: "Multi-component: cooler and accumulator degrade together"
+      UNIT_SEQUENCE: "1787,1788,1789,1790,1791,1792,1793,1794,1795,1796,1055,1056,1057,1058,1059,1060,1061,1062,1063,1064,1188,1189,1190,1191,1192,1193,1194,1195,1196,1197,589,590,591,592,593,594,595,596,597,598"
     networks:
       - cnc_network
     restart: unless-stopped
