@@ -84,7 +84,7 @@ def load_sensor_data():
     return raw, profile
 
 
-# ── Feature extraction — must match hydraulic_classifier.ipynb ────────────────
+#Feature extraction 
 
 def extract_features(raw_sensors, cycle_idx):
     row = {}
@@ -98,7 +98,7 @@ def extract_features(raw_sensors, cycle_idx):
     return row
 
 
-# ── Run inference ─────────────────────────────────────────────────────────────
+# Run inference 
 
 def run_inference(bundle, features):
     scaler        = bundle['scaler']
@@ -152,7 +152,7 @@ def overall_status(components):
     return 'HEALTHY'
 
 
-# ── RabbitMQ ──────────────────────────────────────────────────────────────────
+# RabbitMQ 
 
 def connect_rabbitmq():
     credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
@@ -180,7 +180,7 @@ def publish(channel, message):
     )
 
 
-# ── Main stream loop ──────────────────────────────────────────────────────────
+#Main stream loop 
 
 def run():
     print(f"\n{'='*50}")
