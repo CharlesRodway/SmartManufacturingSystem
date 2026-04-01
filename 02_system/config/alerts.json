@@ -4,17 +4,8 @@
     "unit": "hydraulic_2",
     "component": "pump",
     "label": "Severe leakage",
-    "timestamp": "2026-03-28T21:51:18.797776",
+    "timestamp": "2026-04-01T13:05:03.306590",
     "cycle": 21,
-    "resolved": false
-  },
-  {
-    "type": "hydraulic",
-    "unit": "hydraulic_1",
-    "component": "valve",
-    "label": "Near failure",
-    "timestamp": "2026-03-28T21:51:33.765676",
-    "cycle": 31,
     "resolved": false
   },
   {
@@ -22,7 +13,16 @@
     "unit": "hydraulic_3",
     "component": "cooler",
     "label": "Near failure",
-    "timestamp": "2026-03-28T21:51:34.570042",
+    "timestamp": "2026-04-01T13:05:18.512730",
+    "cycle": 31,
+    "resolved": false
+  },
+  {
+    "type": "hydraulic",
+    "unit": "hydraulic_1",
+    "component": "valve",
+    "label": "Near failure",
+    "timestamp": "2026-04-01T13:05:19.174465",
     "cycle": 31,
     "resolved": false
   }
