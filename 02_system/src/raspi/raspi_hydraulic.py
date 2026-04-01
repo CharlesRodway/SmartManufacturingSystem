@@ -1,18 +1,7 @@
 # Hydraulic Unit Edge Simulator
 # Digital Systems Project - Charles Rodway
 #
-# Simulates a Raspberry Pi edge device for a hydraulic monitoring unit.
-# Replays the UCI Hydraulic Systems dataset cycle by cycle, runs inference
-# using the pre-trained XGBoost bundle, and publishes results to RabbitMQ.
-#
-# Environment variables:
-#   UNIT_NAME        - e.g. hydraulic_1
-#   RABBITMQ_HOST    - hostname of RabbitMQ broker
-#   RABBITMQ_USER    - RabbitMQ username
-#   RABBITMQ_PASS    - RabbitMQ password
-#   STREAM_DELAY     - seconds between cycles (default 0.5)
-#   UNIT_SEQUENCE    - comma-separated cycle indices to replay in order
-#                      if not set, streams all stable cycles in dataset order
+#replays uci hydraulic dataset, runs xgboost inference and publishes the current conditoin to rabbitmq
 
 import os
 import json
@@ -24,7 +13,7 @@ from pathlib import Path
 from datetime import datetime
 import pika
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# config
 
 UNIT_NAME     = os.environ.get("UNIT_NAME", "hydraulic_1")
 RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "localhost")

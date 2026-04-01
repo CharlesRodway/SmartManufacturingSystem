@@ -1,19 +1,6 @@
 # CNC Predictive Maintenance System
 # Digital Systems Project - Charles Rodway
-#
-# Services:
-#   rabbitmq        - message broker between raspi containers and backend
-#   backend         - consumes RabbitMQ messages, holds system state, exposes REST API
-#   dashboard       - nginx serving the modular HTML dashboard at http://localhost:3000
-#   lathe_1/2/3     - simulate Raspberry Pi edge devices for CNC lathes (bearing monitoring)
-#   hydraulic_1/2/3 - simulate Raspberry Pi edge devices for hydraulic units
-#
-# Hydraulic units use custom cycle sequences to simulate realistic degradation:
-#   hydraulic_1 — valve degrades: optimal -> small lag -> severe lag -> near failure
-#   hydraulic_2 — pump leakage:   none -> weak -> severe leakage
-#   hydraulic_3 — multi-component: cooler + accumulator degrade together
-#
-# Usage:
+
 #   docker-compose up --build
 #   Open http://localhost:3000 in Chrome
 #   Login: supervisor / admin123  OR  maintenance / maint123
@@ -70,7 +57,7 @@ services:
       - cnc_network
     restart: unless-stopped
 
-  # ── CNC Lathe containers (bearing monitoring) ─────────────────────────────
+  # lathe containers
 
   lathe_1:
     build:
@@ -142,7 +129,7 @@ services:
       - cnc_network
     restart: unless-stopped
 
-  # ── Hydraulic unit containers ─────────────────────────────────────────────
+  # hydraulic containers
 
   hydraulic_1:
     build:

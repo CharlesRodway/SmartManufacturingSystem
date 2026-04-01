@@ -1,24 +1,7 @@
 # Raspberry Pi Bearing Monitor - Production Version
 # Digital Systems Project - Charles Rodway
 #
-# Reads lathe config from lathes.json, loads pre-trained per-bearing models,
-# streams dataset files, runs inference, and publishes results to RabbitMQ.
-#
-# Supports two modes depending on lathe status in lathes.json:
-#   monitoring  - runs inference and publishes bearing health to RabbitMQ
-#   collecting  - saves raw data files for later training, no inference
-#
-# In a real deployment this would read from physical accelerometers instead
-# of dataset files. The inference and publishing logic stays the same.
-#
-# Environment variables:
-#   LATHE_NAME           - which lathe this Pi represents (e.g. lathe_1)
-#   RABBITMQ_HOST        - RabbitMQ hostname (default: localhost)
-#   RABBITMQ_USER        - RabbitMQ username (default: admin)
-#   RABBITMQ_PASS        - RabbitMQ password (default: password)
-#   STREAM_DELAY         - seconds between readings (default: 0.5)
-#   STREAM_START_PERCENT - skip ahead to this percentage of the dataset (default: 0)
-#                          useful for demos - set to e.g. 75 to start near failure zone
+# loads isolation forest models per bearing and streams vibration data, runs inference on them and published results to rabbitmq
 
 import os
 import sys

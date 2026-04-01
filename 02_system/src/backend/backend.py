@@ -1,22 +1,8 @@
 # Backend Service
 # Digital Systems Project - Charles Rodway
 #
-# Consumes messages from all lathe and hydraulic unit RabbitMQ exchanges.
-# Holds the latest state and reading history for every machine in memory.
-# Logs CRITICAL alerts to a persistent JSON file.
-# Exposes a REST API that the dashboard reads from.
-#
-# Bearing endpoints:
-#   GET /health                    - backend health check
-#   GET /state                     - full bearing system state (all lathes)
-#   GET /state/{lathe}             - single lathe latest state
-#   GET /history/{lathe}           - last N readings for a lathe
-#   GET /alerts                    - all CRITICAL bearing alerts logged
-#
-# Hydraulic endpoints:
-#   GET /hydraulic/state           - full hydraulic system state (all units)
-#   GET /hydraulic/state/{unit}    - single hydraulic unit latest state
-#   GET /hydraulic/history/{unit}  - last N cycle readings for a unit
+#consumes RabbitMQ messages from edge containers, holds system state and exposes REST API for the dashboard.
+
 
 import os
 import json
@@ -30,7 +16,7 @@ import pika
 import uvicorn
 
 
-# ── Settings ─────────────────────────────────────────────────────────────────
+# settings
 
 RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "localhost")
 RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "admin")
@@ -42,7 +28,7 @@ ALERTS_PATH      = "/app/config/alerts.json"
 HISTORY_LENGTH = 500
 
 
-# ── Shared state ──────────────────────────────────────────────────────────────
+# shared state
 
 system_state      = {}
 reading_history   = {}
@@ -52,7 +38,7 @@ maintenance_alerts = []
 state_lock = threading.Lock()
 
 
-# ── Alerts ────────────────────────────────────────────────────────────────────
+# alerts
 
 def load_alerts():
     global maintenance_alerts
@@ -72,7 +58,7 @@ def save_alerts():
         print(f"Could not save alerts: {e}")
 
 
-# ── FastAPI app ───────────────────────────────────────────────────────────────
+# fastapi app
 
 app = FastAPI(title="CNC Predictive Maintenance Backend")
 
@@ -84,7 +70,7 @@ app.add_middleware(
 )
 
 
-# ── Bearing endpoints ─────────────────────────────────────────────────────────
+# endpoints for bearings
 
 @app.get("/health")
 def health():
@@ -120,7 +106,7 @@ def get_alerts():
         return list(reversed(maintenance_alerts))
 
 
-# ── Hydraulic endpoints ───────────────────────────────────────────────────────
+# endpooints for hydraulics
 
 @app.get("/hydraulic/state")
 def get_hydraulic_state():
@@ -145,7 +131,7 @@ def get_hydraulic_history(unit_name: str, n: int = 100):
         return history[-n:] if len(history) > n else history
 
 
-# ── Bearing message handler ───────────────────────────────────────────────────
+# bearing message handler
 
 def on_bearing_message(ch, method, properties, body):
     try:
@@ -203,7 +189,7 @@ def on_bearing_message(ch, method, properties, body):
         print(f"Error processing bearing message: {e}")
 
 
-# ── Hydraulic message handler ─────────────────────────────────────────────────
+# hydrailic message handler
 
 def on_hydraulic_message(ch, method, properties, body):
     try:
@@ -252,7 +238,7 @@ def on_hydraulic_message(ch, method, properties, body):
         print(f"Error processing hydraulic message: {e}")
 
 
-# ── RabbitMQ consumers ────────────────────────────────────────────────────────
+# rabbitmq consumers
 
 def run_consumer_for_lathe(lathe_name):
     credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
