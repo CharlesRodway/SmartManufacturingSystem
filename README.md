@@ -1,75 +1,84 @@
-# CNC Predictive Maintenance System
-**Digital Systems Project — Charles Rodway, UWE Bristol (UFCFXK-30-3)**
+# Low-Cost Predictive Maintenance for SME Manufacturing
 
-A simulated IoT predictive maintenance system for CNC machines. The system uses machine learning to detect bearing anomalies and classify hydraulic faults in real time, with data flowing from simulated edge devices through a message broker to a web dashboard.
+**Digital Systems Project — Charles Rodway (23048890), UWE Bristol (UFCFXK-30-3)**
+
+An open-source, modular machine health monitoring system that uses machine learning to perform predictive maintenance and fault classification. Designed for Small and Medium Enterprises (SMEs) who cannot afford commercial predictive maintenance platforms.
+
+The system deploys in Docker containers simulating Raspberry Pi edge devices, communicating via RabbitMQ, with a real-time web dashboard for monitoring machine health.
 
 ---
 
-## What it does
+## What It Does
 
-The system monitors two types of machine:
+The system monitors two types of industrial equipment:
 
-- **CNC Lathes** — 3 simulated lathes, each with 4 bearings. Isolation Forest models detect anomalies from vibration features and raise alerts when a bearing shows sustained degradation.
-- **Hydraulic Units** — 3 simulated units. XGBoost classifiers predict the condition of 4 components (cooler, valve, pump, accumulator) from sensor readings.
+- **CNC Lathes (Bearing Monitoring)** — 3 simulated lathes, each with 4 bearings. Isolation Forest models detect anomalies from vibration features and raise alerts when a bearing shows sustained degradation (50 consecutive anomalies). Achieved false positive rates of 1.0–1.2% and early warning times of 19–82 hours before failure.
 
-Everything runs in Docker. There is no cloud dependency — the system is designed to run on a local factory network.
+- **Hydraulic Units (Fault Classification)** — 3 simulated units. XGBoost classifiers predict the condition of 4 components (cooler, valve, pump, accumulator) from sensor readings. Achieved F1 scores above 0.97 across all components.
+
+Everything runs in Docker with no cloud dependency — the system is designed to run on a local factory network using edge computing.
 
 ---
 
 ## Architecture
 
 ```
-NASA IMS / UCI sensor data
+Sensor Data (NASA IMS / UCI Hydraulic datasets)
         ↓
-Raspberry Pi containers  (raspi_lathe.py / raspi_hydraulic.py)
-  — loads ML model locally
-  — runs inference on each reading
-  — publishes result to RabbitMQ
+Edge Device Containers  (raspi_lathe.py / raspi_hydraulic.py)
+  — loads pre-trained ML model
+  — extracts features and runs inference locally
+  — publishes predictions to RabbitMQ
         ↓
-RabbitMQ  (message broker)
+RabbitMQ  (message broker, fanout exchanges per machine)
         ↓
-FastAPI backend  (backend.py)
-  — aggregates results
-  — holds state in memory
-  — logs critical alerts
+FastAPI Backend  (backend.py)
+  — aggregates predictions from all 6 machines
+  — maintains system state and reading history
+  — logs CRITICAL alerts to storage
   — exposes REST API on port 8000
         ↓
-nginx dashboard  (http://localhost:3000)
-  — login page
-  — supervisor view (full dashboard)
-  — maintenance view (alerts + status only)
+nginx Dashboard  (http://localhost:3000)
+  — login with role-based access
+  — supervisor view (full dashboard with history charts, heatmap, alerts)
+  — maintenance view (status overview and alerts only)
 ```
 
 ---
 
-## Project structure
+## Project Structure
 
 ```
 cnc-predictive-maintenance/
 ├── 01_model_development/
 │   ├── bearing_isolation_forest.ipynb   # IMS bearing anomaly detection
 │   ├── hydraulic_classifier.ipynb       # UCI hydraulic fault classification
-│   └── results/                         # trained models + plots
+│   └── results/                         # trained models + comparison plots
 │
 ├── 02_system/
-│   ├── docker-compose.yml
+│   ├── docker-compose.yml               # all 9 services defined here
 │   ├── config/
-│   │   ├── lathes.json
-│   │   ├── hydraulics.json
-│   │   └── alerts.json                  # written at runtime
-│   ├── models/                          # model bundles loaded by edge containers
+│   │   ├── lathes.json                  # per-lathe config (bearings, dataset, status)
+│   │   ├── hydraulics.json              # per-unit config (model bundle, status)
+│   │   └── alerts.json                  # written at runtime by backend
+│   ├── models/
+│   │   ├── lathe_1/                     # 4 Isolation Forest .pkl files per lathe
+│   │   ├── lathe_2/
+│   │   ├── lathe_3/
+│   │   └── hydraulic/                   # 3 XGBoost bundles (1 per unit)
 │   ├── src/
-│   │   ├── backend/backend.py
-│   │   └── raspi/raspi_lathe.py
-│   │         raspi_hydraulic.py
-│   ├── dashboard/                       # served by nginx
-│   │   ├── login.html
+│   │   ├── backend/backend.py           # FastAPI + RabbitMQ consumer threads
+│   │   └── raspi/
+│   │       ├── raspi_lathe.py           # bearing edge device (monitoring + collecting modes)
+│   │       └── raspi_hydraulic.py       # hydraulic edge device
+│   ├── dashboard/
+│   │   ├── login.html                   # role-based authentication
 │   │   ├── dashboard.html               # supervisor view
-│   │   ├── maintenance.html             # maintenance view
-│   │   ├── dashboard.js                 # shared core logic
+│   │   ├── maintenance.html             # maintenance staff view
+│   │   ├── dashboard.js                 # shared core logic + MachineRegistry
 │   │   └── machines/
-│   │       ├── lathe.js                 # bearing card module
-│   │       └── hydraulic.js             # hydraulic card module
+│   │       ├── lathe.js                 # bearing monitoring module
+│   │       └── hydraulic.js             # hydraulic monitoring module
 │   └── nginx/nginx.conf
 │
 ├── bearing_data/                        # NASA IMS dataset (not in repo)
@@ -82,26 +91,25 @@ cnc-predictive-maintenance/
 
 - Docker Desktop
 - The datasets are not included in the repo due to size. Place them at:
-  - `bearing_data/` — NASA IMS Bearing Dataset (1st_test, 2nd_test, 3rd_test folders)
-  - `hydraulic_data/` — UCI Hydraulic Systems Dataset (.txt sensor files + profile.txt)
+  - `bearing_data/` — [NASA IMS Bearing Dataset](https://data.nasa.gov/dataset/ims-bearings) (1st_test, 2nd_test, 3rd_test folders)
+  - `hydraulic_data/` — [UCI Hydraulic Systems Dataset](https://archive.ics.uci.edu/dataset/447/condition+monitoring+of+hydraulic+systems) (.txt sensor files + profile.txt)
 
 ---
 
-## How to run
+## How to Run
 
 ```bash
 cd 02_system
 docker-compose up --build
 ```
 
-Then open `http://localhost:3000` in Chrome.
+Open `http://localhost:3000` in Chrome.
 
-To stop:
 ```bash
-docker-compose down
+docker-compose down    # to stop
 ```
 
-> **Note:** Each run starts fresh. The system replays the datasets from the beginning each time so you will always see the full degradation sequence play out.
+> Each run starts fresh — the system replays the datasets from the beginning so you will see the full degradation sequence play out.
 
 ---
 
@@ -109,10 +117,10 @@ docker-compose down
 
 | Username | Password | Role |
 |----------|----------|------|
-| supervisor | admin123 | Full dashboard — all machines, history charts, alerts |
-| maintenance | maint123 | Maintenance panel — alerts and machine status only |
+| supervisor | admin123 | Full dashboard — history charts, fleet heatmap, alerts, machine registration |
+| maintenance | maint123 | Maintenance panel — machine status and critical alerts only |
 
-> These are hardcoded for demonstration purposes. A production deployment would use a proper authentication service.
+> Hardcoded for demonstration. A production deployment would use proper authentication.
 
 ---
 
@@ -121,37 +129,41 @@ docker-compose down
 | Port | Service |
 |------|---------|
 | 3000 | Dashboard (nginx) |
-| 8000 | Backend API (FastAPI) |
+| 8000 | Backend REST API (FastAPI) |
 | 5672 | RabbitMQ broker |
 | 15672 | RabbitMQ management UI (guest/guest) |
 
 ---
 
-## Hydraulic unit degradation sequences
+## Adding a New Machine
 
-Each hydraulic unit is configured to simulate a different fault progression during the demo:
+To add a new lathe or hydraulic unit of a supported type, no code changes are needed:
 
-| Unit | Story |
-|------|-------|
-| Hydraulic 1 | Valve degrades: Optimal → Small lag → Severe lag → Near failure |
-| Hydraulic 2 | Pump leakage: No leakage → Weak leakage → Severe leakage |
+1. Train models and place `.pkl` files in `models/`
+2. Add a config entry to `lathes.json` or `hydraulics.json`
+3. Add a service block to `docker-compose.yml`
+4. Restart the system
+
+The backend discovers machines from config at startup and the dashboard discovers them from API responses.
+
+---
+
+## Hydraulic Degradation Sequences
+
+Each hydraulic unit simulates a different fault progression:
+
+| Unit | Sequence |
+|------|----------|
+| Hydraulic 1 | Valve: Optimal → Small lag → Severe lag → Near failure |
+| Hydraulic 2 | Pump: No leakage → Weak leakage → Severe leakage |
 | Hydraulic 3 | Multi-component: Cooler and accumulator degrade together |
 
 ---
 
-## Branches
+## Datasets
 
-| Branch | Description |
-|--------|-------------|
-| main | Stable working system |
-| modular-dashboard | Modular dashboard with nginx, login system, and custom hydraulic sequences |
-
----
-
-## Datasets used
-
-- **NASA IMS Bearing Dataset** — University of Cincinnati, recorded until bearing failure at 2000 RPM
-- **UCI Hydraulic Systems Dataset** — 2205 operating cycles across 17 sensors, 4 labelled components
+- **NASA IMS Bearing Dataset** — University of Cincinnati. 3 test rigs, 4 bearings each, run to failure at 2000 RPM with vibration data at 20kHz.
+- **UCI Hydraulic Systems Dataset** — 2205 operating cycles, 17 sensors, 4 labelled components (Helwig, Pignanelli and Schütze, 2015).
 
 ---
 
