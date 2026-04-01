@@ -164,7 +164,3 @@ Each hydraulic unit simulates a different fault progression:
 
 - **NASA IMS Bearing Dataset** — University of Cincinnati. 3 test rigs, 4 bearings each, run to failure at 2000 RPM with vibration data at 20kHz.
 - **UCI Hydraulic Systems Dataset** — 2205 operating cycles, 17 sensors, 4 labelled components (Helwig, Pignanelli and Schütze, 2015).
-
----
-
-*BSc Computer Science, Year 3 — UWE Bristol, 2025/26*
