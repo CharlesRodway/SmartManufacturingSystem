@@ -34,7 +34,6 @@ const B_COLOURS  = ['#1a7a3c', '#1f6feb', '#e08000', '#7c3aed'];
 // ── Shared state ──────────────────────────────────────────────────────────────
 
 let systemState    = {};   // bearing machines
-let hydraulicState = {};   // hydraulic machines
 let prevStatuses   = {};
 let eventLog       = [];
 
@@ -76,14 +75,6 @@ async function fetchState() {
         updateBackendPill(false);
         return null;
     }
-}
-
-async function fetchHydraulicState() {
-    try {
-        const r = await fetch(`${BACKEND}/hydraulic/state`);
-        if (!r.ok) return {};
-        return await r.json();
-    } catch { return {}; }
 }
 
 async function fetchHistory(lathe) {
@@ -174,28 +165,14 @@ function renderAlerts(alerts) {
         return;
     }
     listEl.innerHTML = alerts.map(a => {
-        // bearing alert
-        if (a.type !== 'hydraulic') {
-            const machine = a.lathe.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-            const bearing = a.bearing.replace('bearing','Bearing ');
-            return `<div class="alert-item">
-                <div class="ai-title">${machine} — ${bearing}</div>
-                <div class="ai-meta">
-                    ${a.timestamp?.slice(0,19).replace('T',' ') || 'N/A'}<br>
-                    Score: ${a.score?.toFixed(4)} · Kurt: ${a.kurtosis?.toFixed(3)}<br>
-                    Reading: ${a.reading}
-                </div>
-            </div>`;
-        }
-        // hydraulic alert
-        const unit = a.unit.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-        const comp = a.component.charAt(0).toUpperCase() + a.component.slice(1);
+        const machine = a.lathe.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+        const bearing = a.bearing.replace('bearing','Bearing ');
         return `<div class="alert-item">
-            <div class="ai-title">${unit} — ${comp}</div>
+            <div class="ai-title">${machine} — ${bearing}</div>
             <div class="ai-meta">
                 ${a.timestamp?.slice(0,19).replace('T',' ') || 'N/A'}<br>
-                Condition: ${a.label}<br>
-                Cycle: ${a.cycle}
+                Score: ${a.score?.toFixed(4)} · Kurt: ${a.kurtosis?.toFixed(3)}<br>
+                Reading: ${a.reading}
             </div>
         </div>`;
     }).join('');
@@ -207,8 +184,7 @@ function renderHeatmap(bearingState, hydState) {
     const grid   = document.getElementById('heatmap-grid');
     if (!grid) return;
     const lathes = Object.keys(bearingState);
-    const units  = Object.keys(hydState);
-    if (lathes.length === 0 && units.length === 0) { grid.innerHTML = ''; return; }
+    if (lathes.length === 0) { grid.innerHTML = ''; return; }
 
     let html = '';
 
@@ -221,18 +197,6 @@ function renderHeatmap(bearingState, hydState) {
         const mod = MachineRegistry.get('lathe');
         lathes.forEach(lathe => {
             if (mod) html += mod.renderHeatmapRow(lathe, bearingState[lathe], bearings);
-        });
-    }
-
-    if (units.length > 0) {
-        if (lathes.length > 0) html += `<div style="height:6px"></div>`;
-        html += `<div class="hm-row">
-            <div class="hm-lathe-label"></div>
-            <div class="hm-cell" style="background:none;border:none;font-size:0.55rem;color:var(--muted);height:12px;flex:4">HYD UNITS</div>
-        </div>`;
-        const mod = MachineRegistry.get('hydraulic');
-        units.forEach(unit => {
-            if (mod) html += mod.renderHeatmapRow(unit, hydState[unit]);
         });
     }
 

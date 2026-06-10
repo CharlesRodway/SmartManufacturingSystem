@@ -213,7 +213,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);height:100vh
 
 <script src="/dashboard.js"></script>
 <script src="/machines/lathe.js"></script>
-<script src="/machines/hydraulic.js"></script>
 <script>
 let selectedMachine=null,selectedType=null,liveHistory={};
 let histScoreChart,histKurtChart,histRmsChart;
@@ -251,7 +250,7 @@ function renderMachineList(bs,hs){
 
 function selectMachine(name,type){
   selectedMachine=name;selectedType=type;
-  renderMachineList(systemState,hydraulicState);
+  renderMachineList(systemState,{});
   if(type==='lathe'){
     const mod=MachineRegistry.get('lathe');
     if(mod)mod.renderDetail(name,systemState[name],liveHistory[name]||[],SPARK_N,STREAK_MAX);
@@ -260,9 +259,6 @@ function selectMachine(name,type){
       if(mod)mod.renderDetail(name,systemState[name],h,SPARK_N,STREAK_MAX);
       if(document.getElementById('tab-history').classList.contains('active'))updateHistCharts(h);
     });
-  }else{
-    const mod=MachineRegistry.get('hydraulic');
-    if(mod)mod.renderDetail(name,hydraulicState[name]);
   }
 }
 
@@ -296,20 +292,16 @@ function registerMachine(){
 }
 
 async function poll(){
-  const[state,hydState,alerts]=await Promise.all([fetchState(),fetchHydraulicState(),fetchAlerts()]);
+  const[state,alerts]=await Promise.all([fetchState(),fetchAlerts()]);
   if(state){detectChanges(state);systemState=state;}
-  if(hydState)hydraulicState=hydState;
-  renderHeatmap(systemState,hydraulicState);
-  renderMachineList(systemState,hydraulicState);
+  renderHeatmap(systemState,{});
+  renderMachineList(systemState,{});
   if(selectedMachine&&selectedType==='lathe'&&systemState[selectedMachine]){
     const history=await fetchHistory(selectedMachine);
     liveHistory[selectedMachine]=history;
     const mod=MachineRegistry.get('lathe');
     if(mod)mod.renderDetail(selectedMachine,systemState[selectedMachine],history,SPARK_N,STREAK_MAX);
     if(document.getElementById('tab-history').classList.contains('active'))updateHistCharts(history);
-  }else if(selectedMachine&&selectedType==='hydraulic'){
-    const mod=MachineRegistry.get('hydraulic');
-    if(mod)mod.renderDetail(selectedMachine,hydraulicState[selectedMachine]);
   }
   renderAlerts(alerts);renderLog();
   setTimeout(poll,POLL_MS);

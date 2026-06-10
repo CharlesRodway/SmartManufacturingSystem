@@ -22,7 +22,6 @@ RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "localhost")
 RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "admin")
 RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "password")
 CONFIG_PATH      = "/app/config/lathes.json"
-HYDRAULIC_CONFIG = "/app/config/hydraulics.json"
 ALERTS_PATH      = "/app/config/alerts.json"
 
 HISTORY_LENGTH = 500
@@ -32,8 +31,6 @@ HISTORY_LENGTH = 500
 
 system_state      = {}
 reading_history   = {}
-hydraulic_state   = {}
-hydraulic_history = {}
 maintenance_alerts = []
 state_lock = threading.Lock()
 
@@ -106,31 +103,6 @@ def get_alerts():
         return list(reversed(maintenance_alerts))
 
 
-# endpooints for hydraulics
-
-@app.get("/hydraulic/state")
-def get_hydraulic_state():
-    with state_lock:
-        return dict(hydraulic_state)
-
-
-@app.get("/hydraulic/state/{unit_name}")
-def get_hydraulic_unit_state(unit_name: str):
-    with state_lock:
-        if unit_name not in hydraulic_state:
-            raise HTTPException(status_code=404, detail=f"{unit_name} not found")
-        return hydraulic_state[unit_name]
-
-
-@app.get("/hydraulic/history/{unit_name}")
-def get_hydraulic_history(unit_name: str, n: int = 100):
-    with state_lock:
-        if unit_name not in hydraulic_history:
-            return []
-        history = list(hydraulic_history[unit_name])
-        return history[-n:] if len(history) > n else history
-
-
 # bearing message handler
 
 def on_bearing_message(ch, method, properties, body):
@@ -189,55 +161,6 @@ def on_bearing_message(ch, method, properties, body):
         print(f"Error processing bearing message: {e}")
 
 
-# hydrailic message handler
-
-def on_hydraulic_message(ch, method, properties, body):
-    try:
-        message = json.loads(body)
-        unit = message.get("unit")
-        if not unit:
-            return
-
-        with state_lock:
-            hydraulic_state[unit] = message
-
-            if unit not in hydraulic_history:
-                hydraulic_history[unit] = deque(maxlen=HISTORY_LENGTH)
-
-            # store compact history entry for trend charts
-            history_entry = {
-                "cycle":      message.get("cycle"),
-                "timestamp":  message.get("timestamp"),
-                "components": message.get("components", {})
-            }
-            hydraulic_history[unit].append(history_entry)
-
-            # log CRITICAL hydraulic alerts once per component per run
-            if message.get("unit_status") == "CRITICAL":
-                for comp_name, comp_data in message.get("components", {}).items():
-                    if comp_data.get("status") == "CRITICAL":
-                        already_logged = any(
-                            a.get("unit") == unit and a.get("component") == comp_name
-                            for a in maintenance_alerts
-                        )
-                        if not already_logged:
-                            alert = {
-                                "type":      "hydraulic",
-                                "unit":      unit,
-                                "component": comp_name,
-                                "label":     comp_data.get("label", "Unknown"),
-                                "timestamp": message.get("timestamp"),
-                                "cycle":     message.get("cycle"),
-                                "resolved":  False
-                            }
-                            maintenance_alerts.append(alert)
-                            save_alerts()
-                            print(f"ALERT logged: {unit} {comp_name} CRITICAL ({comp_data.get('label')})")
-
-    except Exception as e:
-        print(f"Error processing hydraulic message: {e}")
-
-
 # rabbitmq consumers
 
 def run_consumer_for_lathe(lathe_name):
@@ -268,34 +191,6 @@ def run_consumer_for_lathe(lathe_name):
             time.sleep(5)
 
 
-def run_consumer_for_hydraulic(unit_name):
-    credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
-    parameters  = pika.ConnectionParameters(
-        host=RABBITMQ_HOST, credentials=credentials,
-        heartbeat=60, blocked_connection_timeout=30
-    )
-    while True:
-        try:
-            print(f"[{unit_name}] Connecting to RabbitMQ...")
-            connection = pika.BlockingConnection(parameters)
-            channel    = connection.channel()
-            channel.exchange_declare(exchange=unit_name, exchange_type='fanout', durable=True)
-            result     = channel.queue_declare(queue='', exclusive=True)
-            channel.queue_bind(exchange=unit_name, queue=result.method.queue)
-            channel.basic_consume(
-                queue=result.method.queue,
-                on_message_callback=on_hydraulic_message,
-                auto_ack=True
-            )
-            print(f"[{unit_name}] Connected. Consuming messages...")
-            while True:
-                connection.process_data_events(time_limit=0.1)
-                time.sleep(0.05)
-        except Exception as e:
-            print(f"[{unit_name}] Consumer error: {e}. Reconnecting in 5s...")
-            time.sleep(5)
-
-
 def start_consumers():
     print("Starting RabbitMQ consumers...")
     time.sleep(5)
@@ -315,24 +210,6 @@ def start_consumers():
             t.start()
             count += 1
             print(f"  Started consumer thread for {lathe_name}")
-
-    # hydraulic consumers
-    try:
-        with open(HYDRAULIC_CONFIG) as f:
-            hydraulics_config = json.load(f)
-        for unit_name, config in hydraulics_config.items():
-            if config.get("status") == "monitoring":
-                t = threading.Thread(
-                    target=run_consumer_for_hydraulic,
-                    args=(unit_name,),
-                    daemon=True,
-                    name=f"consumer-{unit_name}"
-                )
-                t.start()
-                count += 1
-                print(f"  Started consumer thread for {unit_name}")
-    except FileNotFoundError:
-        print("  No hydraulics.json found — skipping hydraulic consumers")
 
     print(f"Started {count} consumer threads.")
 
