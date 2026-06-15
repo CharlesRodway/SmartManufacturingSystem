@@ -144,7 +144,6 @@ body {
   <div class="top-right">
     <div class="pill" id="backend-pill">CONNECTING</div>
     <div id="clock">--:--:--</div>
-    <button class="logout-btn" onclick="logout()">Sign out</button>
   </div>
 </div>
 
@@ -182,25 +181,20 @@ body {
 
 <script src="/dashboard.js"></script>
 <script src="/machines/lathe.js"></script>
-<script src="/machines/hydraulic.js"></script>
 <script>
 // maintenance view — only shows status summary, alerts, and event log
 // no history charts, no machine registration, no detailed bearing view
 
 window.addEventListener('load', () => {
-    if (!checkAuth('maintenance')) return;
     startClock();
-    addLog('info', `Signed in as ${sessionStorage.getItem('cnc_user')} (maintenance)`);
     poll();
 });
 
-function renderMachineStatusList(bearingState, hydState) {
+function renderMachineStatusList(bearingState) {
     const el = document.getElementById('machine-status-list');
     let html = '';
 
-    // get status summary from each machine type module
     const latheMod = MachineRegistry.get('lathe');
-    const hydMod   = MachineRegistry.get('hydraulic');
 
     Object.entries(bearingState).forEach(([name, state]) => {
         if (!latheMod) return;
@@ -224,45 +218,18 @@ function renderMachineStatusList(bearingState, hydState) {
         </div>`;
     });
 
-    Object.entries(hydState).forEach(([name, state]) => {
-        if (!hydMod) return;
-        const s = hydMod.getStatusSummary(name, state);
-        if (!s) return;
-        const statusClass = s.status.toLowerCase().replace(' ', '');
-        html += `<div class="maint-card ${statusClass}">
-            <div class="maint-card-top">
-                <div>
-                    <div class="maint-card-name">${s.name}</div>
-                    <div class="maint-card-type">${s.type}</div>
-                </div>
-                <div class="maint-status ${statusClass}">${s.status}</div>
-            </div>
-            <div class="maint-issues">
-                ${s.issues.length === 0
-                    ? '<span>All components healthy</span>'
-                    : s.issues.map(i => `<div class="maint-issue">⚠ ${i}</div>`).join('')}
-            </div>
-            <div class="maint-reading">${s.reading}</div>
-        </div>`;
-    });
-
     el.innerHTML = html || '<div class="no-data-msg">No machines connected.</div>';
 }
 
 async function poll() {
-    const [state, hydState, alerts] = await Promise.all([
-        fetchState(),
-        fetchHydraulicState(),
-        fetchAlerts()
-    ]);
+    const [state, alerts] = await Promise.all([fetchState(), fetchAlerts()]);
 
     if (state) {
         detectChanges(state);
         systemState = state;
     }
-    if (hydState) hydraulicState = hydState;
 
-    renderMachineStatusList(systemState, hydraulicState);
+    renderMachineStatusList(systemState);
     renderAlerts(alerts);
     renderLog();
 

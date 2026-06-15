@@ -37,32 +37,6 @@ let systemState    = {};   // bearing machines
 let prevStatuses   = {};
 let eventLog       = [];
 
-// ── Auth check ────────────────────────────────────────────────────────────────
-// Called on page load — redirects to login if no valid session
-
-function checkAuth(requiredRole) {
-    const role = sessionStorage.getItem('cnc_role');
-    if (!role) {
-        window.location.href = '/login.html';
-        return false;
-    }
-    if (requiredRole && role !== requiredRole && role !== 'supervisor') {
-        window.location.href = '/login.html';
-        return false;
-    }
-    return true;
-}
-
-function logout() {
-    sessionStorage.removeItem('cnc_role');
-    sessionStorage.removeItem('cnc_user');
-    window.location.href = '/login.html';
-}
-
-function getRole() {
-    return sessionStorage.getItem('cnc_role');
-}
-
 // ── API calls ─────────────────────────────────────────────────────────────────
 
 async function fetchState() {

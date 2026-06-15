@@ -2,7 +2,7 @@
   {
     "lathe": "lathe_1",
     "bearing": "bearing4",
-    "timestamp": "2026-06-10T18:46:46.324993",
+    "timestamp": "2026-06-10T21:00:14.354639",
     "reading": 883,
     "score": -0.0583,
     "kurtosis": 7.536,
@@ -12,7 +12,7 @@
   {
     "lathe": "lathe_1",
     "bearing": "bearing3",
-    "timestamp": "2026-06-10T18:47:48.685025",
+    "timestamp": "2026-06-10T21:01:13.360726",
     "reading": 1152,
     "score": -0.1203,
     "kurtosis": 5.774,
@@ -22,7 +22,7 @@
   {
     "lathe": "lathe_2",
     "bearing": "bearing1",
-    "timestamp": "2026-06-10T18:48:33.503803",
+    "timestamp": "2026-06-10T21:02:09.159560",
     "reading": 534,
     "score": -0.1316,
     "kurtosis": 2.349,

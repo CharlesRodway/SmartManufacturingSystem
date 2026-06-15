@@ -4,7 +4,7 @@
 
 An open-source, modular machine health monitoring system that uses machine learning to perform predictive maintenance and fault classification. Designed for Small and Medium Enterprises (SMEs) who cannot afford commercial predictive maintenance platforms.
 
-The system deploys in Docker containers simulating Raspberry Pi edge devices, communicating via RabbitMQ, with a real-time web dashboard for monitoring machine health.
+The system deploys in Docker containers simulating Raspberry Pi edge devices, communicating via RabbitMQ, with a Grafana dashboard for real-time monitoring of machine health.
 
 ---
 
@@ -21,7 +21,7 @@ Everything runs in Docker with no cloud dependency — the system is designed to
 ## Architecture
 
 ```
-Sensor Data (NASA IMS / UCI Hydraulic datasets)
+Sensor Data (NASA IMS bearing dataset)
         ↓
 Edge Device Containers  (raspi_lathe.py)
   — loads pre-trained ML model
@@ -35,11 +35,12 @@ FastAPI Backend  (backend.py)
   — maintains system state and reading history
   — logs CRITICAL alerts to storage
   — exposes REST API on port 8000
+  — serves SimpleJSON endpoints for Grafana
         ↓
-nginx Dashboard  (http://localhost:3000)
-  — login with role-based access
-  — supervisor view (full dashboard with history charts, heatmap, alerts)
-  — maintenance view (status overview and alerts only)
+Grafana  (http://localhost:3000)
+  — connects to backend via SimpleJSON datasource
+  — build dashboards with time series, status panels, and alerts
+  — login: admin / admin
 ```
 
 ---
@@ -65,14 +66,10 @@ cnc-predictive-maintenance/
 │   │   ├── backend/backend.py           # FastAPI + RabbitMQ consumer threads
 │   │   └── raspi/
 │   │       └── raspi_lathe.py           # bearing edge device (monitoring + collecting modes)
-│   ├── dashboard/
-│   │   ├── login.html                   # role-based authentication
-│   │   ├── dashboard.html               # supervisor view
-│   │   ├── maintenance.html             # maintenance staff view
-│   │   ├── dashboard.js                 # shared core logic + MachineRegistry
-│   │   └── machines/
-│   │       └── lathe.js                 # bearing monitoring module
-│   └── nginx/nginx.conf
+│   └── grafana/
+│       └── provisioning/
+│           └── datasources/
+│               └── datasource.yml       # auto-provisions SimpleJSON datasource
 │
 └── bearing_data/                        # NASA IMS dataset (not in repo)
 ```
@@ -94,24 +91,15 @@ cd 02_system
 docker-compose up --build
 ```
 
-Open `http://localhost:3000` in Chrome.
+Open `http://localhost:3000` in your browser — this is Grafana. Log in with `admin / admin`.
+
+The SimpleJSON datasource (`CNC Backend`) is provisioned automatically. Create a new dashboard, add a time series panel, and select metrics from the datasource (e.g. `lathe_1.bearing1.score`).
 
 ```bash
 docker-compose down    # to stop
 ```
 
-> Each run starts fresh — the system replays the datasets from the beginning so you will see the full degradation sequence play out.
-
----
-
-## Logins
-
-| Username | Password | Role |
-|----------|----------|------|
-| supervisor | admin123 | Full dashboard — history charts, fleet heatmap, alerts, machine registration |
-| maintenance | maint123 | Maintenance panel — machine status and critical alerts only |
-
-> Hardcoded for demonstration. A production deployment would use proper authentication.
+> Each run starts fresh — the system replays the dataset from the beginning so you will see the full degradation sequence play out.
 
 ---
 
@@ -119,7 +107,7 @@ docker-compose down    # to stop
 
 | Port | Service |
 |------|---------|
-| 3000 | Dashboard (nginx) |
+| 3000 | Grafana (admin / admin) |
 | 8000 | Backend REST API (FastAPI) |
 | 5672 | RabbitMQ broker |
 | 15672 | RabbitMQ management UI (guest/guest) |
@@ -135,7 +123,7 @@ To add a new lathe, no code changes are needed:
 3. Add a service block to `docker-compose.yml`
 4. Restart the system
 
-The backend discovers machines from config at startup and the dashboard discovers them from API responses.
+The backend discovers machines from config at startup. The `/search` endpoint will expose new metric names to Grafana automatically once messages arrive.
 
 ---
 

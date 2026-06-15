@@ -143,7 +143,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);height:100vh
   <div class="top-right">
     <div class="pill" id="backend-pill">CONNECTING</div>
     <div id="clock">--:--:--</div>
-    <button class="logout-btn" onclick="logout()">Sign out</button>
   </div>
 </div>
 
@@ -218,12 +217,10 @@ let selectedMachine=null,selectedType=null,liveHistory={};
 let histScoreChart,histKurtChart,histRmsChart;
 
 window.addEventListener('load',()=>{
-  if(!checkAuth('supervisor'))return;
   startClock();
   histScoreChart=makeHistChart('hist-score');
   histKurtChart=makeHistChart('hist-kurtosis');
   histRmsChart=makeHistChart('hist-rms');
-  addLog('info',`Signed in as ${sessionStorage.getItem('cnc_user')} (supervisor)`);
   addLog('info','Dashboard initialised. Connecting to backend...');
   poll();
 });

@@ -1,0 +1,9 @@
+apiVersion: 1
+
+datasources:
+  - name: CNC Backend
+    type: grafana-simple-json-datasource
+    access: proxy
+    url: http://backend:8000
+    isDefault: true
+    editable: true

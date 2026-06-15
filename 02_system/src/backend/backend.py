@@ -10,7 +10,7 @@ import time
 import threading
 from collections import deque
 from datetime import datetime
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import pika
 import uvicorn
@@ -65,6 +65,63 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# grafana simple-json datasource endpoints
+
+@app.get("/")
+def root():
+    return {"status": "ok"}
+
+
+@app.post("/search")
+def search():
+    with state_lock:
+        metrics = []
+        for lathe, data in system_state.items():
+            for bearing in data.get("bearings", {}).keys():
+                metrics.append(f"{lathe}.{bearing}.score")
+            metrics.append(f"{lathe}.machine_status")
+    return metrics
+
+
+@app.post("/query")
+async def query(request: Request):
+    body      = await request.json()
+    targets   = body.get("targets", [])
+    status_map = {"HEALTHY": 0, "WARNING": 1, "CRITICAL": 2}
+    results   = []
+
+    with state_lock:
+        for t in targets:
+            target = t.get("target", "")
+            parts  = target.split(".")
+
+            if len(parts) == 3 and parts[2] == "score":
+                lathe, bearing = parts[0], parts[1]
+                if lathe in reading_history:
+                    datapoints = []
+                    for entry in reading_history[lathe]:
+                        ts    = entry.get("timestamp")
+                        score = entry.get("bearings", {}).get(bearing, {}).get("score")
+                        if ts and score is not None:
+                            ts_ms = int(datetime.fromisoformat(ts).timestamp() * 1000)
+                            datapoints.append([score, ts_ms])
+                    results.append({"target": target, "datapoints": datapoints})
+
+            elif len(parts) == 2 and parts[1] == "machine_status":
+                lathe = parts[0]
+                if lathe in reading_history:
+                    datapoints = []
+                    for entry in reading_history[lathe]:
+                        ts     = entry.get("timestamp")
+                        status = entry.get("machine_status")
+                        if ts and status:
+                            ts_ms = int(datetime.fromisoformat(ts).timestamp() * 1000)
+                            datapoints.append([status_map.get(status, 0), ts_ms])
+                    results.append({"target": target, "datapoints": datapoints})
+
+    return results
 
 
 # endpoints for bearings
